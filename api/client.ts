@@ -78,7 +78,7 @@ export class Client {
 	isConnecting = false;
 
 
-	constructor(prog: (theSurroundings: number[],SendDir: (dir: Direction) => void) => void) {
+	constructor(prog: (theGetObservation: () => string,SendDir: (dir: Direction) => void) => void) {
 		// TARTA: onkeydown => parseDirKey
 		initServerSelection();
 		this.doConnect();
@@ -91,10 +91,11 @@ export class Client {
 	
 		//@ts-ignore: source
 		setInterval(()=>{
+			console.log('INTERVAL');
 			this.loop(Date.now());
-		},10)
+		},100)
 	
-		prog(this.surroundings,this.sendDir.bind(this));
+		prog(this.getObservation.bind(this),this.sendDir.bind(this));
 	
 	};
 
@@ -171,7 +172,6 @@ export class Client {
 	//sends new direction to websocket
 	sendDir(dir: Direction, skipQueue?: boolean) {
 		// console.log("======sendDir",dir, skipQueue);
-		console.log(this)
 		if (!this.ws || !this.myPos) {
 			return false;
 		}
@@ -343,6 +343,7 @@ export class Client {
 
 	//when WebSocket connection is closed
 	onClose() {
+		console.log("!!! Closing gameserver websocket !!!");
 		if (!!this.ws && this.ws.readyState == WebSocket.OPEN) {
 			this.ws.close();
 		}
@@ -392,6 +393,7 @@ export class Client {
 				}
 			};
 			this.ws.onclose = function (): void {
+				console.log('!!! The end is nigh !!!')
 				if (that.ws == this) {
 					that.onClose();
 				}
@@ -408,7 +410,6 @@ export class Client {
 
 	//when receiving a message from the websocket
 	onMessage(evt: MessageEvent) {
-		//console.log(evt);
 		let x, y, type, id, player, w, h, block, i, j, nameBytes;
 		const data: Uint8Array = new Uint8Array(evt.data);
 		// console.log(evt.data);
@@ -641,6 +642,8 @@ export class Client {
 			w = bytesToInt(data[5], data[6]);
 			h = bytesToInt(data[7], data[8]);
 			i = 9;
+			console.log(`<<< CHUNK_OF_BLOCKS x:${x} y:${y} w:${w} h:${h}`);
+
 			for (j = x; j < x + w; j++) {
 				for (let k = y; k < y + h; k++) {
 					block = this.getBlock(j, k);
@@ -756,6 +759,7 @@ export class Client {
 				}
 				console.log(`<<< YOU_DED killer: ${_lastStatKiller}`);
 			}
+			console.log(`<<< YOU_DED nokiller`);
 			this.closedBecauseOfDeath = true;
 			this.allowSkipDeathTransition = true;
 			//show newsbox
@@ -962,7 +966,7 @@ export class Client {
 			for (let j = y; j < y2; j++) {
 				const block = this.getBlock(i, j, array);
 				//let thisType = applyPattern(type, pattern, i, j);
-				block.setBlockId(type, isEdgeChunk ? false : Math.random() * 400);
+				block.setBlockId(type);
 			}
 		}
 	}
@@ -1013,6 +1017,7 @@ export class Client {
 	}
 
 	loop(timeStamp: number) {
+		console.log('loop')
 		let i, lastTrail;
 		const realDeltaTime = timeStamp - (this.prevTimeStamp ?? 0);
 		if (realDeltaTime > this.lerpedDeltaTime) {
@@ -1273,9 +1278,108 @@ export class Client {
 			this.skipDeathTransition = true;
 		}
 	}
+
+	getObservation(): string {
+		let obs;
+		try {
+			obs = new Observation(this)
+		} catch (e) {
+			if(e instanceof ObservationSpecificError){
+				return '""';
+			} else throw e;
+		}
+		return obs.compile();
+	}
 }
 
+class ObservationSpecificError extends Error{}
 
+class Observation {
+	myPos: Position;
+	myRank: number;
+	block_surroundings = Array.from({length: 25}, ()=> 0);
+	trail_surroundings = Array.from({length: 25}, ()=> 0);
+	player_surroundings: [number,number,number][];
+	score: number = 25;
+	RADIUS: number = 10;
+	constructor(client: Client){
+		if(client.myPos === null) throw new ObservationSpecificError('Client is not initialized yet.');
+		
+		this.myPos = client.myPos;
+		this.myRank = client.myRank;
+		this.score = client.realScoreStat;
+		
+		this.block_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
+		for(let i = 0; i < this.RADIUS*2+1; i++){
+			for(let j = 0; j < this.RADIUS*2+1; j++){
+				let block=client.getBlock(this.myPos[0]-this.RADIUS+j,this.myPos[1]-this.RADIUS+i).currentBlock;
+				if(block >= 2){
+					block=(block-2)%SKIN_BLOCK_COUNT+2; // Ignore pattern information 
+				}
+				this.block_surroundings[(this.RADIUS*2+1)*i+j]=block;
+			}
+		}
+		this.trail_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
+		this.player_surroundings = Array.from({length:(this.RADIUS*2+1)**2}, ()=> [-1,-1,-1]);
+		for(const player of client.players){
+			this.player_surroundings.push([player.skinBlock, player.pos[0], player.pos[1]]); // color, x, y
+			player.trails.slice(-1);
+			trail_loop: for(const {trail} of player.trails){
+				if(trail.length == 0) continue trail_loop;
+				let [px,py] = trail[0];
+				vertex_loop: for(let ti = 1; ti < trail.length; ti++){
+					const [dx,dy] = trail[ti];
+					const mx = Math.sign(dx-px);
+					const my = Math.sign(dy-py);
+					let outside = false;
+					let rpx = px, rpy= py;
+					if(px < this.myPos[0] - this.RADIUS){
+						rpx = this.myPos[0] - this.RADIUS;
+						outside ||= mx == 0;
+					} else if(px > this.myPos[0] + this.RADIUS) {
+						rpx = this.myPos[0] + this.RADIUS;
+						outside ||= mx == 0;
+					}
+
+					if(py < this.myPos[1] - this.RADIUS){
+						rpy = this.myPos[1] - this.RADIUS;
+						outside ||= my == 0;
+					} else if(py > this.myPos[1] + this.RADIUS) {
+						rpy = this.myPos[1] + this.RADIUS;
+						outside ||= my == 0;
+					} else {
+						outside = false;
+					}
+					if(outside) continue vertex_loop;
+					const rdx=clamp(dx,this.myPos[0] - this.RADIUS,this.myPos[0]+ this.RADIUS)
+					const rdy=clamp(dy,this.myPos[1] - this.RADIUS,this.myPos[1]+ this.RADIUS)
+
+					let x=rpx, y=rpy;
+					if(mx==0 && my==0) continue vertex_loop;
+					while((rdx-x)*mx>=0 && (rdy-y)*my>=0){
+						this.trail_surroundings[
+							(this.RADIUS*2+1)*(x-this.myPos[0])
+							                 +(y-this.myPos[1])
+						] = player.skinBlock;
+						x+=mx;
+						y+=my;
+					}
+					px=dx,py=dy;
+				}
+			}
+		}
+
+	}
+
+	compile(): string {
+		return JSON.stringify({
+			players: this.player_surroundings,
+			trails: this.trail_surroundings,
+			blocks: this.block_surroundings,
+			score: this.score,
+		});
+	}
+}
 
 
 function countPlayGame() {

@@ -6,9 +6,9 @@ const server = new WebSocketServer(7979);
 
 
 server.on("connection", (client: WebSocketClient) => {
-    let gameclient = new Client( (surroundings: number[],sendDir) => {
+    let gameclient = new Client( (getObservation: () => string,sendDir) => {
         setInterval(()=>{
-            client.send(JSON.stringify(surroundings))
+            client.send(getObservation())
         },83);
         client.on('message', message => {
             if(message === "u") sendDir(Direction.Up);

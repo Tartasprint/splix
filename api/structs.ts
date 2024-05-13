@@ -149,7 +149,7 @@ export class Block
     //animateDelay defaults to 0
     //if animateDelay === false, don't do any animation at all
     // deno-lint-ignore no-explicit-any
-    setBlockId(blockId: number, animateDelay?: any) {
+    setBlockId(blockId: number, animateDelay:any= false) {
         this.lastSetTime = Date.now();
         if (animateDelay === false) {
             this.currentBlock = this.nextBlock = blockId;
