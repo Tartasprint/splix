@@ -6,7 +6,7 @@ const server = new WebSocketServer(7979);
 
 
 server.on("connection", (client: WebSocketClient) => {
-    let gameclient = new Client( (getObservation: () => string,sendDir) => {
+    const _gameclient = new Client( (getObservation: () => string,sendDir) => {
         setInterval(()=>{
             client.send(getObservation())
         },83);

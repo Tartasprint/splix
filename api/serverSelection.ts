@@ -1,4 +1,4 @@
-let selected_server: any = null;
+let selected_server: null | string = null;
 export function initServerSelection() {
 	const _endPoint = "https://splix.io/gameservers";
 	
@@ -6,10 +6,10 @@ export function initServerSelection() {
 		{"displayName":"US West","endpoint":"wss://sfo.splix.io/2","playerCount":3,"official":true},
 		{"displayName":"Europe","endpoint":"wss://fra.splix.io/2","playerCount":7,"official":true},
 		{"displayName":"Drawing","endpoint":"wss://nyc2.splix.io/2","playerCount":1},
-		{"displayName":"US East","endpoint":"wss://nyc3.splix.io/1","playerCount":27,"official":true,"recommended":true}][0];
+		{"displayName":"US East","endpoint":"wss://nyc3.splix.io/1","playerCount":27,"official":true,"recommended":true}][0].endpoint;
 }
 
 export function getSelectedServer() {
 	// deno-lint-ignore no-constant-condition
-	return true ? selected_server.endpoint : "ws://localhost:8080/gameserver";
+	return true ? selected_server : "ws://localhost:8080/gameserver";
 }

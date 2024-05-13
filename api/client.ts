@@ -4,7 +4,6 @@ import { Block, Direction, Player, Position, movePos, receiveAction, sendAction 
 import { Utf8ArrayToStr, bytesToInt, intToBytes, toUTF8Array } from "./conversion.ts";
 import { CHAR_0 } from "https://deno.land/std@0.198.0/path/_constants.ts";
 import { GLOBAL_SPEED, SKIN_BLOCK_COUNT, VIEWPORT_RADIUS, WAIT_FOR_DISCONNECTED_MS, clamp, dtCaps, getColorForBlockSkinId, getDtCap, iLerp, lerp, lerptt, orderTwoPos } from "./constants.ts";
-import { dirname } from "https://deno.land/std@0.198.0/path/dirname.ts";
 
 // Some dated code is using these in places like `for(i = 0`.
 // While ideally these variables should all be made local,
@@ -16,6 +15,7 @@ export class Client {
 	ws: WebSocket | null = null;
 	prevTimeStamp: number | null = null;
 	
+	// deno-lint-ignore no-explicit-any
 	leaderboard: any[] = [];
 	blocks: Block[] = [];
 	players: Player[] = [];
@@ -386,6 +386,7 @@ export class Client {
 			this.thisServerAvgPing = this.thisServerLastPing = 0;
 			this.ws = new WebSocket(server);
 			this.ws.binaryType = "arraybuffer";
+			// deno-lint-ignore no-this-alias
 			const that = this;
 			this.ws.onmessage = function (evt: MessageEvent) {
 				if (that.ws == this) {
@@ -585,7 +586,7 @@ export class Client {
 			if (replace) {
 				if (player.trails.length > 0) {
 					const last = player.trails[player.trails.length - 1];
-					//@ts-ignore
+					//@ts-ignore dunno
 					last.trail = newTrail;
 					last.vanishTimer = 0;
 				} else {
@@ -594,7 +595,7 @@ export class Client {
 			}
 			if (!replace) {
 				player.trails.push({
-					//@ts-ignore
+					//@ts-ignore: dunno
 					trail: newTrail,
 					vanishTimer: 0,
 				});
@@ -943,7 +944,7 @@ export class Client {
 	}
 
 	//fills an area, if array is not specified it defaults to blocks[]
-	fillArea(x: number, y: number, w:number, h:number, type: number, pattern: number, array?: Block[], isEdgeChunk = false) {
+	fillArea(x: number, y: number, w:number, h:number, type: number, pattern: number, array?: Block[], _isEdgeChunk = false) {
 		const defaultArray = array === undefined;
 		if (defaultArray) {
 			array = this.blocks;
