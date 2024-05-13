@@ -1289,6 +1289,7 @@ export class Client {
 				return '""';
 			} else throw e;
 		}
+
 		return obs.compile();
 	}
 }
@@ -1298,8 +1299,8 @@ class ObservationSpecificError extends Error{}
 class Observation {
 	myPos: Position;
 	myRank: number;
-	block_surroundings = Array.from({length: 25}, ()=> 0);
-	trail_surroundings = Array.from({length: 25}, ()=> 0);
+	block_surroundings: number[];
+	trail_surroundings: number[];
 	player_surroundings: [number,number,number][];
 	score: number = 25;
 	RADIUS: number = 10;
@@ -1320,16 +1321,16 @@ class Observation {
 				this.block_surroundings[(this.RADIUS*2+1)*i+j]=block;
 			}
 		}
-		this.trail_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
+		this.trail_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> -1);
 		this.player_surroundings = Array.from({length:(this.RADIUS*2+1)**2}, ()=> [-1,-1,-1]);
 		for(const player of client.players){
 			this.player_surroundings.push([player.skinBlock, player.pos[0], player.pos[1]]); // color, x, y
-			player.trails.slice(-1);
+			player.trails=player.trails.splice(-1)
 			trail_loop: for(const {trail} of player.trails){
 				if(trail.length == 0) continue trail_loop;
-				let [px,py] = trail[0];
-				vertex_loop: for(let ti = 1; ti < trail.length; ti++){
-					const [dx,dy] = trail[ti];
+				vertex_loop: for(let ti = 0; ti < trail.length; ti++){
+					const [px,py] = trail[ti];
+					const [dx,dy] = ti==trail.length-1 ? player.pos : trail[ti+1];
 					const mx = Math.sign(dx-px);
 					const my = Math.sign(dy-py);
 					let outside = false;
@@ -1359,17 +1360,15 @@ class Observation {
 					if(mx==0 && my==0) continue vertex_loop;
 					while((rdx-x)*mx>=0 && (rdy-y)*my>=0){
 						this.trail_surroundings[
-							(this.RADIUS*2+1)*(x-this.myPos[0])
-							                 +(y-this.myPos[1])
+							(this.RADIUS*2+1)*(x-this.myPos[0]+this.RADIUS)
+							                 +(y-this.myPos[1]+this.RADIUS)
 						] = player.skinBlock;
 						x+=mx;
 						y+=my;
 					}
-					px=dx,py=dy;
 				}
 			}
 		}
-
 	}
 
 	compile(): string {
@@ -1378,6 +1377,7 @@ class Observation {
 			trails: this.trail_surroundings,
 			blocks: this.block_surroundings,
 			score: this.score,
+			pos: this.myPos,
 		});
 	}
 }

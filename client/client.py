@@ -21,7 +21,7 @@ async def communication():
 				if stop: return
 				intercom.append(message)
 				surroundings=json.loads(message)
-				print("RECEPT")
+				#print("RECEPT")
 				n+=1
 				if n < 50:
 					await websocket.send('p')
@@ -87,14 +87,9 @@ if __name__ == "__main__":
 		screen.fill((0,0,0))
 
 		if state is not None:
-			# draw a solid blue circle in the center
 			if n%10000==0:
-				blocks=[]
-				for x in range(21):
-					blocks.append([])
-					for y in range(21):
-						blocks[-1].append(state["blocks"][21*x+y])
-				print('\n'.join([' '.join(map(lambda v: str(v).ljust(3),row)) for row in blocks]))
+				# printing for debug
+				print(state['pos'])
 			for x in range(21):
 				for y in range(21):
 					color = state["blocks"][21*x+y]
@@ -108,7 +103,12 @@ if __name__ == "__main__":
 						color = "#000000"
 					color=pygame.Color(color)
 					pygame.draw.rect(screen, color, pygame.Rect(y*20+2,x*20+2,16,16))
-
+			for x in range(21):
+				for y in range(21):
+					color = state["trails"][21*x+y]
+					if color >= 0:
+						color = pygame.Color(colors.getColorForBlockSkinId(color)["darker"])
+						pygame.draw.circle(screen, color,(x*20+10,y*20+10), 5)
 		# flip the display
 		pygame.display.flip()
 	
