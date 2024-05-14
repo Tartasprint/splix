@@ -1,5 +1,17 @@
 export type Position = [number, number];
 
+export const int_position = (p: Position) => {
+    const n = p; n[0] = Math.floor(p[0]); n[1]=Math.floor(p[1]);
+    return n;
+}
+
+export const enum ClientState {
+    PREPARING,
+    PLAYING,
+    DEAD,
+    DISCONNECTED,
+}
+
 //move pos along dir with offset
 export function movePos(pos: number[], dir: number, offset: number) {
 	switch (dir) {
@@ -28,7 +40,7 @@ export const enum Direction {
 
 export class Player {
     id: number;
-    pos: number[];
+    pos: Position;
     drawPos: number[];
     drawPosSet: boolean;
     serverPos: Position;

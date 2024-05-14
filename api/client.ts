@@ -1,6 +1,6 @@
 import { getSelectedServer, initServerSelection } from "./serverSelection.ts";
 import { display_name } from "./config.ts"
-import { Block, Direction, Player, Position, movePos, receiveAction, sendAction } from "./structs.ts";
+import { Block, ClientState, Direction, Player, Position, int_position, movePos, receiveAction, sendAction } from "./structs.ts";
 import { Utf8ArrayToStr, bytesToInt, intToBytes, toUTF8Array } from "./conversion.ts";
 import { CHAR_0 } from "https://deno.land/std@0.198.0/path/_constants.ts";
 import { GLOBAL_SPEED, SKIN_BLOCK_COUNT, VIEWPORT_RADIUS, WAIT_FOR_DISCONNECTED_MS, clamp, dtCaps, getColorForBlockSkinId, getDtCap, iLerp, lerp, lerptt, orderTwoPos } from "./constants.ts";
@@ -76,9 +76,18 @@ export class Client {
 	lastSendDir = -1; lastSendDirTime = 0;  //used to prevent spamming buttons
 	sendDirQueue: {dir: Direction, addTime: number}[] = [];
 	isConnecting = false;
+	pilot_ondead: ()=>void;
+	pilot_onready: ()=>void;
+	state: ClientState = ClientState.PREPARING;
+	client_count: number;
+  loop_interval_id: number;
 
-
-	constructor(prog: (theGetObservation: () => string,SendDir: (dir: Direction) => void) => void) {
+	constructor(
+		prog: (theGetObservation: () => string | null,SendDir: (dir: Direction) => boolean) => void,
+		ondead: ()=>void,
+		onready: ()=>void,
+		client_count: number,
+	) {
 		// TARTA: onkeydown => parseDirKey
 		initServerSelection();
 		this.doConnect();
@@ -89,15 +98,19 @@ export class Client {
 		this.bestStatAlive = Math.max(this.bestStatAlive, Number(localStorage.getItem("bestStatAlive")));
 		this.bestStatNo1Time = Math.max(this.bestStatNo1Time, Number(localStorage.getItem("bestStatNo1Time")));
 	
-		//@ts-ignore: source
-		setInterval(()=>{
-			console.log('INTERVAL');
+		this.loop_interval_id = setInterval(()=>{
 			this.loop(Date.now());
 		},100)
-	
+		this.pilot_ondead=ondead;
+		this.pilot_onready=onready;
+		this.client_count = client_count;
 		prog(this.getObservation.bind(this),this.sendDir.bind(this));
-	
 	};
+
+	// deno-lint-ignore no-explicit-any
+	log(...args: any){
+		//console.log(`Client@${this.client_count}`,...args)
+	}
 
 	//gets a block from the specified array,
 	//creates it if it doesn't exist yet
@@ -145,7 +158,8 @@ export class Client {
 
 	//sends name to websocket
 	sendName() {
-		const n: string = display_name;
+		const n: string = display_name();
+		console.log('>>> NAME', n);
 		if (n !== undefined && n !== null && n !== "" && n.trim() !== "") {
 			this.wsSendMsg(sendAction.SET_USERNAME, n);
 		}
@@ -171,12 +185,14 @@ export class Client {
 
 	//sends new direction to websocket
 	sendDir(dir: Direction, skipQueue?: boolean) {
-		// console.log("======sendDir",dir, skipQueue);
+		// this.log("======sendDir",dir, skipQueue);
 		if (!this.ws || !this.myPos) {
+			this.log(';;; Message not sent because not ready');
 			return false;
 		}
 		//myPlayer doesn't exist
 		if (!this.myPlayer) {
+			this.log(';;; Message not sent because not ready');
 			return false;
 		}
 
@@ -185,15 +201,18 @@ export class Client {
 			dir == this.lastSendDir && //if dir is same as old sendDir call
 			(Date.now() - this.lastSendDirTime) < 0.7 / GLOBAL_SPEED // if last call was less than 'one block travel time' ago
 		) {
+			this.log(';;; Message not sent because SPAM');
 			return false;
+
 		}
 		this.lastSendDir = dir;
 		this.lastSendDirTime = Date.now();
 
 		//dir is already the current direction, don't do anything
 		if (this.myPlayer.dir == dir) {
-			// console.log("already current direction, don't do anything");
+			// this.log("already current direction, don't do anything");
 			this.addSendDirQueue(dir, skipQueue);
+			this.log(';;; Message not sent because ALREADY');
 			return false;
 		}
 
@@ -204,8 +223,9 @@ export class Client {
 			(dir == 1 && this.myPlayer.dir == 3) ||
 			(dir == 3 && this.myPlayer.dir == 1)
 		) {
-			// console.log("already opposite direction, don't send");
+			// this.log("already opposite direction, don't send");
 			this.addSendDirQueue(dir, skipQueue);
+			this.log(';;; Message not sent because OPP DIR');
 			return false;
 		}
 
@@ -216,10 +236,10 @@ export class Client {
 		const roundCoord = Math.round(coord);
 		newPos[horizontal ? 1 : 0] = roundCoord;
 
-		// console.log("test already sent");
+		// this.log("test already sent");
 
 		//test if the coordinate being sent wasn't already sent earlier
-		// console.log(lastChangedDirPos);
+		// this.log(lastChangedDirPos);
 		if (
 			this.lastChangedDirPos !== null &&(
 			(this.myPlayer.dir === 0 && newPos[0] <= this.lastChangedDirPos[0]) ||
@@ -227,8 +247,9 @@ export class Client {
 			(this.myPlayer.dir == 2 && newPos[0] >= this.lastChangedDirPos[0]) ||
 			(this.myPlayer.dir == 3 && newPos[1] >= this.lastChangedDirPos[1]))
 		) {
-			// console.log("same coordinate, don't send");
+			// this.log("same coordinate, don't send");
 			this.addSendDirQueue(dir, skipQueue);
+			this.log(';;; Message not sent because ALREADY SENT');
 			return false;
 		}
 
@@ -246,8 +267,6 @@ export class Client {
 			changeDirNow = true;
 		}
 
-		// console.log("changeDirNow",changeDirNow);
-
 		if (changeDirNow) {
 			this.changeMyDir(dir, newPos);
 		} else {
@@ -261,7 +280,7 @@ export class Client {
 			this.lastMyPosSetValidClientSideTime = Date.now();
 		}
 		this.lastMyPosHasBeenConfirmed = false;
-		// console.log("send ======= UPDATE_DIR ======",dir,newPos);
+		// this.log("send ======= UPDATE_DIR ======",dir,newPos);
 		this.wsSendMsg(sendAction.UPDATE_DIR, {
 			dir: dir,
 			coord: newPos,
@@ -270,7 +289,7 @@ export class Client {
 	}
 
 	addSendDirQueue(dir: Direction, skip?: boolean) {
-		// console.log("adding sendDir to queue", dir, skip);
+		// this.log("adding sendDir to queue", dir, skip);
 		if (!skip && this.sendDirQueue.length < 3) {
 			this.sendDirQueue.push({
 				dir: dir,
@@ -280,7 +299,7 @@ export class Client {
 	}
 
 	changeMyDir(dir: Direction, newPos: Position, extendTrail?: boolean, isClientside?: boolean) {
-		// console.log("changeMyDir");
+		// this.log("changeMyDir");
 		if(this.myPlayer === null) throw new Error('Impossible !');
 		this.myPlayer.dir = this.myNextDir = dir;
 		this.myPlayer.pos = [newPos[0], newPos[1]];
@@ -343,30 +362,36 @@ export class Client {
 
 	//when WebSocket connection is closed
 	onClose() {
-		console.log("!!! Closing gameserver websocket !!!");
+		this.log("!!! Closing gameserver websocket !!!");
 		if (!!this.ws && this.ws.readyState == WebSocket.OPEN) {
 			this.ws.close();
 		}
+		const f = this.pilot_ondead;
+		this.pilot_ondead = ()=>{};
+		f()
+		clearInterval(this.loop_interval_id);
 		if (!this.playingAndReady) {
 			if (!this.isTransitioning) {
 				if (this.couldntConnect()) {
-					// TARTA: BUG
+					this.state = ClientState.DISCONNECTED;
 				}
 		} else if (!this.closedBecauseOfDeath) {
-			throw new Error('The connection was lost');
-		} else { //disconnect because of death
+			this.state = ClientState.DISCONNECTED;
 
+		} else { //disconnect because of death
 		}
 		this.ws = null;
 		this.isConnecting = false;
-	}}
+	}
+	this.state = ClientState.DEAD;
+}
 
 	//if trying to establish a connection but failed
 	//returns true if it actually couldn't connect,
 	//false if it will try again
 	couldntConnect() {
 		const err = new Error("couldntConnectError");
-		console.log(err.stack);
+		this.log(err.stack);
 		this.isTransitioning = true;
 		return true;
 	}
@@ -394,10 +419,8 @@ export class Client {
 				}
 			};
 			this.ws.onclose = function (): void {
-				console.log('!!! The end is nigh !!!')
-				if (that.ws == this) {
-					that.onClose();
-				}
+				that.log('Closing the gameserver websocket')
+				that.onClose();
 			};
 			this.ws.onopen = function () {
 				if (that.ws == this) {
@@ -413,10 +436,10 @@ export class Client {
 	onMessage(evt: MessageEvent) {
 		let x, y, type, id, player, w, h, block, i, j, nameBytes;
 		const data: Uint8Array = new Uint8Array(evt.data);
-		// console.log(evt.data);
+		// this.log(evt.data);
 		// for(let key in receiveAction){
 		// 	if(receiveAction[key] == data[0]){
-		// 		console.log(key);
+		// 		this.log(key);
 		// 	}
 		// }
 		if (data[0] == receiveAction.UPDATE_BLOCKS) {
@@ -425,13 +448,13 @@ export class Client {
 			type = data[5];
 			block = this.getBlock(x, y);
 			block.setBlockId(type);
-			console.log(`<<< UPDATE_BLOCKS x:${x} y:${y} type:${type}`);
+			this.log(`<<< UPDATE_BLOCKS x:${x} y:${y} type:${type}`);
 		}
 		if (data[0] == receiveAction.PLAYER_POS) {
 			x = bytesToInt(data[1], data[2]);
 			y = bytesToInt(data[3], data[4]);
 			id = bytesToInt(data[5], data[6]);
-			console.log(`<<< PLAYER_POS x:${x} y:${y} id:${id}`);
+			this.log(`<<< PLAYER_POS x:${x} y:${y} id:${id}`);
 			player = this.getPlayer(id);
 			player.hasReceivedPosition = true;
 			player.moveRelativeToServerPosNextFrame = true;
@@ -451,8 +474,8 @@ export class Client {
 			let doSetPos = true;
 			if (player.isMyPlayer) {
 				this.lastMyPosServerSideTime = Date.now();
-				// console.log("current dir:",player.dir, "myNextDir", myNextDir, "newDir", newDir);
-				// console.log("newPosOffset",newPosOffset, "player.pos", player.pos);
+				// this.log("current dir:",player.dir, "myNextDir", myNextDir, "newDir", newDir);
+				// this.log("newPosOffset",newPosOffset, "player.pos", player.pos);
 
 				//if dir and pos are close enough to the current dir and pos
 				if (
@@ -460,8 +483,8 @@ export class Client {
 					Math.abs(newPosOffset[0] - player.pos[0]) < 1 &&
 					Math.abs(newPosOffset[1] - player.pos[1]) < 1
 				) {
-					// console.log("newPosOffset",newPosOffset);
-					// console.log("doSetPos is false because dir and pos are close enough to current dir and pos");
+					// this.log("newPosOffset",newPosOffset);
+					// this.log("doSetPos is false because dir and pos are close enough to current dir and pos");
 					doSetPos = false;
 				}
 
@@ -472,7 +495,7 @@ export class Client {
 				// client makes move #2
 				// receives move #1 <-- different from current dir & pos
 				// recieves move #2
-				// console.log(lastClientsideMoves);
+				// this.log(lastClientsideMoves);
 				if (this.lastClientsideMoves.length > 0) {
 					//@ts-expect-error: We checked at the previous line that de array is not empty ! :)
 					const lastClientsideMove: {dir: Direction, pos: Position} = this.lastClientsideMoves.shift();
@@ -482,22 +505,22 @@ export class Client {
 						lastClientsideMove.pos[1] == newPos[1]
 					) {
 						doSetPos = false;
-						// console.log("new dir is same as last isClientside move");
-						// console.log("doSetPos = false;");
+						// this.log("new dir is same as last isClientside move");
+						// this.log("doSetPos = false;");
 					} else {
 						this.lastClientsideMoves = [];
-						// console.log("empty lastClientsideMoves");
+						// this.log("empty lastClientsideMoves");
 					}
 				}
 
 				if (player.dir == 4 || newDir == 4) { //is paused or is about to be paused
-					// console.log("player.dir == 4 or newDir == 4, doSetPos = true");
+					// this.log("player.dir == 4 or newDir == 4, doSetPos = true");
 					doSetPos = true;
 				}
 
-				// console.log("doSetPos:",doSetPos);
+				// this.log("doSetPos:",doSetPos);
 				if (doSetPos) {
-					// console.log("==================doSetPos is true================");
+					// this.log("==================doSetPos is true================");
 					this.myNextDir = newDir;
 					this.changeMyDir(newDir, newPos, false, false);
 					//doSetPos is true, so the server thinks the player is somewhere
@@ -517,8 +540,9 @@ export class Client {
 			}
 
 			if (doSetPos) {
+				//@ts-expect-error: DUNNO
 				player.pos = newPosOffset;
-				// console.log("doSetPos",newPosOffset);
+				// this.log("doSetPos",newPosOffset);
 
 				const extendTrailFlagSet = data.length > 8;
 				if (extendTrailFlagSet) {
@@ -547,11 +571,12 @@ export class Client {
 			type = data[9];
 			const pattern = data[10];
 			const isEdgeChunk = data[11];
-			console.log(`<<< FILL_AREA x:${x} y:${y} w:${w} h:${h} type:${type} pattern:${pattern} isEdgeChunk:${isEdgeChunk}`);
+			//this.log(`<<< FILL_AREA x:${x} y:${y} w:${w} h:${h} type:${type} pattern:${pattern} isEdgeChunk:${isEdgeChunk}`);
 			this.fillArea(x, y, w, h, type, pattern, undefined, isEdgeChunk === 0);
 		}
 		if (data[0] == receiveAction.SET_TRAIL) {
 			id = bytesToInt(data[1], data[2]);
+			//this.log(`<<< SET_TRAIL id:${id}`);
 			player = this.getPlayer(id);
 			const newTrail = [];
 			//wether the new trail should replace the old trail (don't play animation)
@@ -603,6 +628,7 @@ export class Client {
 		}
 		if (data[0] == receiveAction.EMPTY_TRAIL_WITH_LAST_POS) {
 			id = bytesToInt(data[1], data[2]);
+			//this.log(`<<< EMPTY_TRAIL_WITH_LAST_POS id:${id}`);
 			player = this.getPlayer(id);
 			if (player.trails.length > 0) {
 				const prevTrail = player.trails[player.trails.length - 1].trail;
@@ -635,6 +661,7 @@ export class Client {
 				y = bytesToInt(data[5], data[6]);
 				player.pos = [x, y];
 			}
+			this.log(`<<< PLAYER_DIE id:${id} x:${x} y:${y}`);
 			player.die(true);
 		}
 		if (data[0] == receiveAction.CHUNK_OF_BLOCKS) {
@@ -643,7 +670,7 @@ export class Client {
 			w = bytesToInt(data[5], data[6]);
 			h = bytesToInt(data[7], data[8]);
 			i = 9;
-			console.log(`<<< CHUNK_OF_BLOCKS x:${x} y:${y} w:${w} h:${h}`);
+			this.log(`<<< CHUNK_OF_BLOCKS x:${x} y:${y} w:${w} h:${h}`);
 
 			for (j = x; j < x + w; j++) {
 				for (let k = y; k < y + h; k++) {
@@ -658,6 +685,7 @@ export class Client {
 			}
 		}
 		if (data[0] == receiveAction.REMOVE_PLAYER) {
+			this.log(`<<< REMOVE_PLAYER id:${id}`);
 			id = bytesToInt(data[1], data[2]);
 			for (i = this.players.length - 1; i >= 0; i--) {
 				player = this.players[i];
@@ -668,9 +696,10 @@ export class Client {
 		}
 		if (data[0] == receiveAction.PLAYER_NAME) {
 			id = bytesToInt(data[1], data[2]);
-			nameBytes = data.subarray(3, data.length);
+			nameBytes = Utf8ArrayToStr(data.subarray(3, data.length));
+			this.log(`<<< PLAYER_NAME id:${id} name:${nameBytes}`);
 			player = this.getPlayer(id);
-			player.name = name;
+			player.name = nameBytes;
 		}
 		if (data[0] == receiveAction.MY_SCORE) {
 			const score = bytesToInt(data[1], data[2], data[3], data[4]);
@@ -680,14 +709,16 @@ export class Client {
 			}
 			this.scoreStatTarget = score;
 			this.realScoreStatTarget = score + kills * 500;
-			console.log(`### score: ${this.realScoreStatTarget}, kills: ${kills}, blocks: ${score}`);
+			this.log(`<<< MY_SCORE score: ${this.realScoreStatTarget}, kills: ${kills}, blocks: ${score}`);
 		}
 		if (data[0] == receiveAction.MY_RANK) {
 			this.myRank = bytesToInt(data[1], data[2]);
+			this.log(`<<< MY_RANK rank:${this.myRank}`);
 			this.myRankSent = true;
 			this.updateStats();
 		}
 		if (data[0] == receiveAction.LEADERBOARD) {
+			this.log(`<<< LEADERBOARD [...]`);
 			this.totalPlayers = bytesToInt(data[1], data[2]);
 			this.updateStats();
 			this.leaderboard = [];
@@ -711,22 +742,14 @@ export class Client {
 		}
 		if (data[0] == receiveAction.MAP_SIZE) {
 			this.mapSize = bytesToInt(data[1], data[2]);
-			console.log(`<<< MAP_SIZE size:${this.mapSize}`);
+			this.log(`<<< MAP_SIZE size:${this.mapSize}`);
 		}
 		if (data[0] == receiveAction.YOU_DED) {
 			if (data.length > 1) {
-				/*
-				lastStatBlocks = bytesToInt(data[1], data[2], data[3], data[4]);
-				if (lastStatBlocks > bestStatBlocks) {
-					bestStatBlocks = lastStatBlocks;
-					lsSet("bestStatBlocks", bestStatBlocks);
-				}
-				lastStatKills = bytesToInt(data[5], data[6]);
-				if (lastStatKills > bestStatKills) {
-					bestStatKills = lastStatKills;
-					lsSet("bestStatKills", bestStatKills);
-				}
-				lastStatLbRank = bytesToInt(data[7], data[8]);
+				
+				const lastStatBlocks = bytesToInt(data[1], data[2], data[3], data[4]);
+				const lastStatKills = bytesToInt(data[5], data[6]);
+				/*lastStatLbRank = bytesToInt(data[7], data[8]);
 				if ((lastStatLbRank < bestStatLbRank || bestStatLbRank <= 0) && lastStatLbRank > 0) {
 					bestStatLbRank = lastStatLbRank;
 					lsSet("bestStatLbRank", bestStatLbRank);
@@ -758,31 +781,15 @@ export class Client {
 								_lastStatKiller = "yourself";
 								break;
 				}
-				console.log(`<<< YOU_DED killer: ${_lastStatKiller}`);
+				console.log(`<<< YOU_DED killer: ${_lastStatKiller} blocks: ${lastStatBlocks} kills: ${lastStatKills}`);
 			}
 			console.log(`<<< YOU_DED nokiller`);
 			this.closedBecauseOfDeath = true;
 			this.allowSkipDeathTransition = true;
-			//show newsbox
-			this.deathTransitionTimeout = setTimeout(() => {
-				// resetAll();
-				if (this.skipDeathTransition) {
-					doTransition("", false, () => {
-						this.onClose();
-						this.resetAll();
-					});
-				} else {
-					// console.log("before doTransition",isTransitioning);
-					doTransition("GAME OVER", true, null, () => {
-						this.onClose();
-						this.resetAll();
-					}, true);
-					// console.log("after doTransition",isTransitioning);
-				}
-				this.deathTransitionTimeout = null;
-			}, 1000);
+			this.onClose()
 		}
 		if (data[0] == receiveAction.MINIMAP) {
+			//this.log(`<<< MINIMAP [...]`);
 			const part = data[1];
 			const xOffset = part * 20;
 			for (i = 1; i < data.length; i++) {
@@ -804,9 +811,13 @@ export class Client {
 				const _myColorId = data[3];
 			}
 			player.skinBlock = data[3];
+			this.log(`<<< PLAYER_SKIN id:${id} skin:${player.skinBlock}`);
 		}
 		if (data[0] == receiveAction.READY) {
+			this.log(`<<< READY`);
 			this.playingAndReady = true;
+			this.state = ClientState.PLAYING;
+			this.pilot_onready();
 			if (!this.isTransitioning) {
 				this.isTransitioning = true;
 			}
@@ -817,6 +828,7 @@ export class Client {
 			const pointsColor = getColorForBlockSkinId(data[3]);
 			x = bytesToInt(data[4], data[5]);
 			y = bytesToInt(data[6], data[7]);
+			this.log(`<<< PLAYER_HIT_LINE id:${id} x:${x} y:${y}`);
 			let _hitSelf = false;
 			if (data.length > 8) {
 				_hitSelf = data[8] == 1;
@@ -831,6 +843,7 @@ export class Client {
 			player = this.getPlayer(id);
 			const time = data[3];
 			player.doHonk(time);
+			this.log(`<<< PLAYER_HONK id:${id}, time:${time}`);
 		}
 		if (data[0] == receiveAction.PONG) {
 			const ping = Date.now() - this.lastPingTime;
@@ -860,7 +873,7 @@ export class Client {
 		if (!!this.ws && this.ws.readyState == WebSocket.OPEN) {
 			const array = [action];
 			if (action == sendAction.UPDATE_DIR) {
-				console.log(`>>> UPDATE_DIR dir: ${data.dir}, x: ${data.coord[0]}, y: ${data.coord[1]}`);
+				this.log(`>>> UPDATE_DIR dir: ${data.dir}, x: ${data.coord[0]}, y: ${data.coord[1]}`);
 				array.push(data.dir);
 				const coordBytesX = intToBytes(data.coord[0], 2);
 				array.push(coordBytesX[0]);
@@ -873,23 +886,23 @@ export class Client {
 				action == sendAction.SET_USERNAME || action == sendAction.SET_TEAM_USERNAME ||
 				action == sendAction.PATREON_CODE
 			) {
-				console.log(`>>> ${sendAction[action]} data: ${data}`);
+				this.log(`>>> ${sendAction[action]} data: ${data}`);
 				utf8Array = toUTF8Array(data);
 				array.push.apply(array, utf8Array);
 			}
 			if (action == sendAction.SKIN) {
-				console.log(`>>> SKIN blockColor: ${data.blockColor}, pattern: ${data.pattern}.`);
+				this.log(`>>> SKIN blockColor: ${data.blockColor}, pattern: ${data.pattern}.`);
 				array.push(data.blockColor);
 				array.push(data.pattern);
 			}
 			if (action == sendAction.REQUEST_CLOSE) {
-				console.log(`>>> REQUEST_CLOSE data: ${data}`);
+				this.log(`>>> REQUEST_CLOSE data: ${data}`);
 				for (let i = 0; i < data.length; i++) {
 					array.push(data[i]);
 				}
 			}
 			if (action == sendAction.HONK) {
-				console.log(`>>> HONK data: ${data}`);
+				this.log(`>>> HONK data: ${data}`);
 				array.push(data);
 			}
 			if (action == sendAction.MY_TEAM_URL) {
@@ -897,7 +910,7 @@ export class Client {
 				array.push.apply(array, utf8Array);
 			}
 			if (action == sendAction.VERSION) {
-				console.log(`>>> VERSION type: ${data.type}, ver: ${data.ver}`);
+				this.log(`>>> VERSION type: ${data.type}, ver: ${data.ver}`);
 				array.push(data.type);
 				const verBytes = intToBytes(data.ver, 2);
 				array.push(verBytes[0]);
@@ -908,7 +921,7 @@ export class Client {
 				this.ws.send(payload);
 				return true;
 			} catch (ex) {
-				console.log("error sending message", action, data, array, ex);
+				this.log("error sending message", action, data, array, ex);
 			}
 		}
 		return false;
@@ -1018,7 +1031,7 @@ export class Client {
 	}
 
 	loop(timeStamp: number) {
-		console.log('loop')
+		//this.log('loop')
 		let i, lastTrail;
 		const realDeltaTime = timeStamp - (this.prevTimeStamp ?? 0);
 		if (realDeltaTime > this.lerpedDeltaTime) {
@@ -1174,8 +1187,9 @@ export class Client {
 				//if my player
 				if (player.isMyPlayer) {
 					if(this.pauseInit === false){
-						this.sendDir(Direction.Pause);
+						//this.sendDir(Direction.Pause);
 						this.pauseInit = true;
+						console.log(player.pos)
 					}
 					this.myPos = [player.pos[0], player.pos[1]];
 					if (this.camPosSet) {
@@ -1187,7 +1201,7 @@ export class Client {
 					}
 	
 					if (this.myNextDir != player.dir) {
-						// console.log("myNextDir != player.dir (",myNextDir,"!=",player.dir,")");
+						// this.log("myNextDir != player.dir (",myNextDir,"!=",player.dir,")");
 						const horizontal = player.dir === 0 || player.dir == 2;
 						//only change when currently traveling horizontally and new dir is not horizontal
 						//or when new dir is horizontal but not currently traveling horizontally
@@ -1248,12 +1262,13 @@ export class Client {
 		const clientSideSetPosPassed = Date.now() - this.lastMyPosSetClientSideTime;
 		const clientSideValidSetPosPassed = Date.now() - this.lastMyPosSetValidClientSideTime;
 		const serverSideSetPosPassed = Date.now() - this.lastMyPosServerSideTime;
-		// console.log(clientSideSetPosPassed, clientSideValidSetPosPassed, serverSideSetPosPassed);
+		// this.log(clientSideSetPosPassed, clientSideValidSetPosPassed, serverSideSetPosPassed);
 		if (
 			clientSideValidSetPosPassed > WAIT_FOR_DISCONNECTED_MS &&
 			serverSideSetPosPassed - clientSideSetPosPassed > WAIT_FOR_DISCONNECTED_MS && !this.myPlayer?.isDead
 		) {
-			throw new Error('It seems you are disconnected.');
+			this.state = ClientState.DISCONNECTED
+			this.onClose()
 		}
 	
 		const maxPingTime = this.waitingForPing ? 10000 : 5000;
@@ -1266,7 +1281,7 @@ export class Client {
 	
 	}
 
-	doSkipDeathTransition() {
+	_doSkipDeathTransition() {
 		if (this.allowSkipDeathTransition) {
 			if (this.deathTransitionTimeout !== null) {
 				clearTimeout(this.deathTransitionTimeout);
@@ -1280,13 +1295,14 @@ export class Client {
 		}
 	}
 
-	getObservation(): string {
+	getObservation(): string | null {
+		if(!this.playingAndReady) return null;
 		let obs;
 		try {
 			obs = new Observation(this)
 		} catch (e) {
 			if(e instanceof ObservationSpecificError){
-				return '""';
+				return null;
 			} else throw e;
 		}
 
@@ -1308,6 +1324,8 @@ class Observation {
 		if(client.myPos === null) throw new ObservationSpecificError('Client is not initialized yet.');
 		
 		this.myPos = client.myPos;
+		this.myPos[0] = Math.floor(this.myPos[0])
+		this.myPos[1] = Math.floor(this.myPos[1])
 		this.myRank = client.myRank;
 		this.score = client.realScoreStat;
 		
@@ -1329,8 +1347,8 @@ class Observation {
 			trail_loop: for(const {trail} of player.trails){
 				if(trail.length == 0) continue trail_loop;
 				vertex_loop: for(let ti = 0; ti < trail.length; ti++){
-					const [px,py] = trail[ti];
-					const [dx,dy] = ti==trail.length-1 ? player.pos : trail[ti+1];
+					const [px,py] = int_position(trail[ti]);
+					const [dx,dy] = ti==trail.length-1 ? int_position(player.pos) : trail[ti+1];
 					const mx = Math.sign(dx-px);
 					const my = Math.sign(dy-py);
 					let outside = false;

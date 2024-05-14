@@ -7,7 +7,7 @@ export function initServerSelection() {
 		{"displayName":"Europe","endpoint":"wss://fra.splix.io/2","playerCount":7,"official":true},
 		{"displayName":"Drawing","endpoint":"wss://nyc2.splix.io/2","playerCount":1},
 		{"displayName":"US East","endpoint":"wss://nyc3.splix.io/1","playerCount":27,"official":true,"recommended":true}]
-		[3].endpoint;
+		[1].endpoint;
 }
 
 export function getSelectedServer() {
