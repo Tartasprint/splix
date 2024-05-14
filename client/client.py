@@ -1,3 +1,4 @@
+
 import asyncio
 import websockets
 import json
@@ -8,15 +9,21 @@ import time
 from fix_sleep import sleep
 import threading
 import tensorflow as tf
-
-intercom = collections.deque(maxlen=1)
-neural_intercom = collections.deque(maxlen=1)
-communicating = True # Controls communication loop
-interfacing = True # Controls pygame loop
-uri = "ws://localhost:7979"
+import keras
 
 
-async def start_communication():
+class NeuralIntercom():
+	def __init__(self) -> None:
+		self.intercom = collections.deque(maxlen=1)
+		self.received=0
+	def push(self,v):
+		self.intercom.append(v)
+		self.received+=1
+	def pop(self):
+		r=self.intercom.pop(),self.received
+		self.received=0
+		return r
+async def start_communication(model):
 	global interfacing
 	print('START COM')
 	async with websockets.connect(uri) as websocket:
@@ -24,46 +31,59 @@ async def start_communication():
 			raise ValueError('Protocol error !')
 		else:
 			print('CONNECTED')
-		await asyncio.gather(send_loop(websocket),receive_loop(websocket))
+		await asyncio.gather(send_loop(websocket,model),receive_loop(websocket))
 		print('DISCONNECTED')
 		interfacing=False
 		await websocket.close()
 
-async def send_loop(websocket: websockets.WebSocketClientProtocol, model):
+async def send_loop(websocket: websockets.WebSocketClientProtocol, model: keras.Sequential):
 	global communicating
 	n=0
 	last=time.time()
 	await sleep(0.350)
 	try:
 		await websocket.send('p')
-	except websockets.exceptions.ConnectionClosedOK:
+	except websockets.exceptions.ConnectionClosed:
 		communicating=False
 		return
 	await sleep(5)
 	while communicating:
-		await sleep(0.015)
-		new=time.time()
-		if(new-last) < 1.66-0.007: continue
-		last=new
-		seq='uldr'
-		next_move=seq[n%len(seq)]
-		n+=1
-		if next_move == 'w': continue
 		try:
-			await websocket.send(next_move)
-		except websockets.exceptions.ConnectionClosedOK:
+			state,n=neural_intercom.pop()
+			#print('missed frames',n)
+		except:
+			await asyncio.sleep(0.1)
+			continue
+		state=json.loads(state)
+		if state == '': continue
+		blocks=tf.constant(state["blocks"], dtype=tf.float32, shape=(21,21))
+		trails=tf.constant(state["trails"], dtype=tf.float32, shape=(21,21))
+		state=tf.stack([blocks,trails],axis=2)
+		state=tf.reshape(state,(1,21,21,2))
+		y=tf.reshape(model.predict([state]),(6))
+		y=tf.argmax(y).numpy()
+		y="udlrpw"[y]
+		try:
+			await websocket.send(y)
+		except websockets.exceptions.ConnectionClosed:
 			communicating=False
 			return
+		new = time.time()
+		print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
+		last=new
+	print("SENDING DONE")
 
 async def receive_loop(websocket: websockets.WebSocketClientProtocol):
 	global communicating
 	while communicating:
+		print('YAY')
 		try:
 			message = await websocket.recv()
-		except websockets.exceptions.ConnectionClosedOK:
+		except websockets.exceptions.ConnectionClosed:
 			communicating=False
 			return
 		intercom.append(message)
+		neural_intercom.push(message)
 
 def pygame_interface():
 	global interfacing
@@ -72,7 +92,7 @@ def pygame_interface():
 	pygame.fastevent.init()
 
 	# screen dimensions
-	HEIGHT = 420
+	HEIGHT= 420
 	WIDTH = 420
 
 	# set up the drawing window
@@ -136,18 +156,18 @@ def pygame_interface():
 	communicating = False
 	pygame.quit()
 
-def game_thread():
+def game_thread(model):
 	global communicating, interfacing
 	async def prog():
 		await asyncio.gather(
 			asyncio.to_thread(pygame_interface),
-			start_communication(),
+			start_communication(model),
 		)
 	asyncio.run(prog())
 	print('=======')
 
 def run(model):
-	g=threading.Thread(target=game_thread)
+	g=threading.Thread(target=game_thread,args=(model,))
 	try:
 		g.start()
 	except KeyboardInterrupt:
@@ -156,5 +176,21 @@ def run(model):
 		communicating=False
 	g.join()
 
+intercom = collections.deque(maxlen=1)
+neural_intercom = NeuralIntercom()
+communicating = True # Controls communication loop
+interfacing = True # Controls pygame loop
+uri = "ws://localhost:7979"
+
+
 if __name__ == '__main__':
-	run()
+	model = keras.Sequential([
+		keras.Input((21,21,2)),
+		keras.layers.Conv2D(4,3,activation='relu'),
+		keras.layers.MaxPool2D(),
+		keras.layers.Flatten(),
+		keras.layers.Dense(64, activation='relu'),
+		keras.layers.Dense(6, activation='relu'),
+	])
+	model.compile(loss="mse", optimizer=keras.optimizers.Adam(learning_rate=0.001), metrics=['accuracy'])
+	run(model)
