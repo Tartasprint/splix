@@ -117,6 +117,8 @@ export class Client {
 	//if array is not specified it will default to the blocks[] array
 	getBlock(x: number, y: number, array?: Block[]) {
 		let block;
+		x = Math.floor(x)
+		y = Math.floor(y)
 		if (array === undefined) {
 			array = this.blocks;
 		}
@@ -406,6 +408,7 @@ export class Client {
 			const server = getSelectedServer();
 			if (!server) {
 				this.onClose();
+				console.log('No SERVER');
 				return false;
 			}
 			this.thisServerAvgPing = this.thisServerLastPing = 0;
@@ -420,6 +423,7 @@ export class Client {
 			};
 			this.ws.onclose = function (): void {
 				that.log('Closing the gameserver websocket')
+				console.log('UPSTREAM CLOSE')
 				that.onClose();
 			};
 			this.ws.onopen = function () {
@@ -774,12 +778,12 @@ export class Client {
 							_lastStatKiller = Utf8ArrayToStr(nameBytes);
 						}
 						break;
-						case 2:
-							_lastStatKiller = "the wall";
-							break;
-							case 3:
-								_lastStatKiller = "yourself";
-								break;
+					case 2:
+						_lastStatKiller = "the wall";
+						break;
+					case 3:
+						_lastStatKiller = "yourself";
+						break;
 				}
 				console.log(`<<< YOU_DED killer: ${_lastStatKiller} blocks: ${lastStatBlocks} kills: ${lastStatKills}`);
 			}
@@ -1268,6 +1272,7 @@ export class Client {
 			serverSideSetPosPassed - clientSideSetPosPassed > WAIT_FOR_DISCONNECTED_MS && !this.myPlayer?.isDead
 		) {
 			this.state = ClientState.DISCONNECTED
+			console.log('YOU GOT DISCON')
 			this.onClose()
 		}
 	
@@ -1286,6 +1291,7 @@ export class Client {
 			if (this.deathTransitionTimeout !== null) {
 				clearTimeout(this.deathTransitionTimeout);
 				this.deathTransitionTimeout = null;
+				console.log('SKIP DEATH TRANS')
 				this.onClose();
 				doTransition("", false, () => {
 					this.resetAll();
@@ -1295,8 +1301,8 @@ export class Client {
 		}
 	}
 
-	getObservation(): string | null {
-		if(!this.playingAndReady) return null;
+	getObservation(dying: boolean = false): string | null {
+		if(!this.playingAndReady && this.lastStatDeathType == 0) return null;
 		let obs;
 		try {
 			obs = new Observation(this)
@@ -1305,7 +1311,8 @@ export class Client {
 				return null;
 			} else throw e;
 		}
-
+		obs.dying = dying
+		//if(dying) console.log(obs.compile());
 		return obs.compile();
 	}
 }
@@ -1317,22 +1324,23 @@ class Observation {
 	myRank: number;
 	block_surroundings: number[];
 	trail_surroundings: number[];
-	player_surroundings: [number,number,number][];
-	score: number = 25;
+	player_surroundings: number[];
+	block_score: number = 25;
+	kill_score: number = 0;
 	RADIUS: number = 10;
+	dying: boolean = false;
 	constructor(client: Client){
-		if(client.myPos === null) throw new ObservationSpecificError('Client is not initialized yet.');
+		if(client.myPos === null && client.lastStatDeathType === 0) throw new ObservationSpecificError('Client is not initialized yet.');
 		
-		this.myPos = client.myPos;
-		this.myPos[0] = Math.floor(this.myPos[0])
-		this.myPos[1] = Math.floor(this.myPos[1])
+		this.myPos = int_position(client.myPos);
 		this.myRank = client.myRank;
-		this.score = client.realScoreStat;
+		this.block_score = client.scoreStatTarget;
+		this.kill_score = (client.realScoreStatTarget-this.block_score)/500;
 		
 		this.block_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
 		for(let i = 0; i < this.RADIUS*2+1; i++){
 			for(let j = 0; j < this.RADIUS*2+1; j++){
-				let block=client.getBlock(this.myPos[0]-this.RADIUS+j,this.myPos[1]-this.RADIUS+i).currentBlock;
+				let block=client.getBlock(this.myPos[0]-this.RADIUS+i,this.myPos[1]-this.RADIUS+j).currentBlock;
 				if(block >= 2){
 					block=(block-2)%SKIN_BLOCK_COUNT+2; // Ignore pattern information 
 				}
@@ -1340,15 +1348,24 @@ class Observation {
 			}
 		}
 		this.trail_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> -1);
-		this.player_surroundings = Array.from({length:(this.RADIUS*2+1)**2}, ()=> [-1,-1,-1]);
+		this.player_surroundings = Array.from({length:(this.RADIUS*2+1)**2}, ()=> -1);
 		for(const player of client.players){
-			this.player_surroundings.push([player.skinBlock, player.pos[0], player.pos[1]]); // color, x, y
+			const playerPos = int_position(player.pos)
+			if(
+				this.myPos[0] - this.RADIUS <= playerPos[0] && playerPos[0] <= this.myPos[0] + this.RADIUS
+			&&	this.myPos[1] - this.RADIUS <= playerPos[1] && playerPos[1] <= this.myPos[1] + this.RADIUS
+			){
+
+				this.player_surroundings[
+					(this.RADIUS*2+1)*(playerPos[0] - this.myPos[0] + this.RADIUS) 
+					+ playerPos[1] - this.myPos[1] + this.RADIUS] = player.skinBlock;
+			}
 			player.trails=player.trails.splice(-1)
 			trail_loop: for(const {trail} of player.trails){
 				if(trail.length == 0) continue trail_loop;
 				vertex_loop: for(let ti = 0; ti < trail.length; ti++){
 					const [px,py] = int_position(trail[ti]);
-					const [dx,dy] = ti==trail.length-1 ? int_position(player.pos) : trail[ti+1];
+					const [dx,dy] = ti==trail.length-1 ? playerPos : trail[ti+1];
 					const mx = Math.sign(dx-px);
 					const my = Math.sign(dy-py);
 					let outside = false;
@@ -1394,8 +1411,10 @@ class Observation {
 			players: this.player_surroundings,
 			trails: this.trail_surroundings,
 			blocks: this.block_surroundings,
-			score: this.score,
+			block_score: this.block_score,
+			kill_score: this.kill_score,
 			pos: this.myPos,
+			dying: this.dying,
 		});
 	}
 }
@@ -1420,28 +1439,6 @@ function lsSet(name: string, value: string) {
 		return false;
 	}
 }
-
-
-//when page is finished loading
-
-
-
-
-
-
-
-
-//called when a skinbutton is pressed
-//add = -1 or 1 (increment/decrement)
-//type = 0 (color) or 1 (pattern)
-
-
-
-//apply camera transformations on a canvas
-//canvasTransformType is a global that determines what
-//transformation should be used
-
-
 
 //starts the transition
 //reverseOnHalf: start playing backwords once it is showing the title

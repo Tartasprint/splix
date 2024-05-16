@@ -28,9 +28,17 @@ server.on("connection", (client: WebSocketClient) => {
             });
         },
         () => {
-            client.close(1000);
-            console.log('Server@Closing client', client_count)
-            clearInterval(obs_interval[0])
+            const obs = gameclient.getObservation(true)
+            if(obs !== null){
+                clearInterval(obs_interval[0])
+                client.send(obs)
+                console.log('sending observation')
+            }
+            
+            setTimeout(()=>{
+                client.close(1000);
+                console.log('Server@Closing client', client_count)
+            },1000)
         },
         () => {
             client.send('READY');

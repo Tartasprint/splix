@@ -1,8 +1,8 @@
 export type Position = [number, number];
 
-export const int_position = (p: Position) => {
-    const n = p; n[0] = Math.floor(p[0]); n[1]=Math.floor(p[1]);
-    return n;
+export const int_position = (p: Position): Position => {
+    //@ts-expect-error: Dumb compiler
+    return p.map(Math.floor);
 }
 
 export const enum ClientState {
