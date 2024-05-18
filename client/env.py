@@ -45,6 +45,7 @@ class Env:
 	def __init__(self, model, maxsteps, epsilon, logging=False) -> None:
 		self.steps = []
 		self.model = model
+		self.model.get_layer(index=0).reset_state()
 		self.maxsteps = maxsteps
 		self.epsilon = epsilon
 		self.step_counter = 0
@@ -98,13 +99,11 @@ class Env:
 			state,_missed_frames=r
 			self.log("MISSED:",_missed_frames)
 			newscore=state['kill_score']*500+state['block_score']
-			
-
 			blocks=tf.constant(state["blocks"], dtype=tf.float32, shape=(21,21))
 			trails=tf.constant(state["trails"], dtype=tf.float32, shape=(21,21))
 			players=tf.constant(state["players"], dtype=tf.float32, shape=(21,21))
 			vision=tf.stack([blocks,trails,players],axis=2)
-			vision=tf.reshape(vision,(1,21,21,3))
+			vision=tf.reshape(vision,(1,1,1323))
 			reward=newscore-score
 			score=newscore
 			if state['dying']:
@@ -112,7 +111,7 @@ class Env:
 			self.total_reward +=reward
 			if len(self.steps) > 0:
 				self.steps[-1][-1] = state['dying']
-				self.steps[-1][-2] = tf.reshape(vision, shape=(21,21,3))
+				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
 			if self.neural_intercom.dead:
 				self.communicating = False
@@ -128,7 +127,7 @@ class Env:
 					return
 			else:
 				self.step_counter = 0
-			y=tf.reshape(self.model.predict([vision]),(6))
+			y=tf.reshape(self.model.predict([vision])[0],(6))
 			yagent=tf.argmax(y).numpy()
 			yeps = numpy.random.randint(0,len(ACTION_SPACE))
 			if numpy.random.random() > self.epsilon:
@@ -146,7 +145,7 @@ class Env:
 				self.log('END L121')
 				return
 			# prev, action, reward, new_state, done
-			self.steps.append([tf.reshape(vision, shape=(21,21,3)),y,0,tf.reshape(vision, shape=(21,21,3)),False])
+			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
 			new = time.time()
 			self.log('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
 			last=new
