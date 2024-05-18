@@ -39,10 +39,10 @@ class NeuralIntercom():
 			return None
 
 class Env:
-	communicating = True # Controls communication loop
-	interfacing = True # Controls pygame loop
-	uri = "ws://localhost:7979"
 	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False) -> None:
+		self.communicating = True # Controls communication loop
+		self.interfacing = True # Controls pygame loop
+		self.uri = "ws://hercule.local:7979"
 		self.steps = []
 		self.model = model
 		self.model.get_layer(index=0).reset_state()
