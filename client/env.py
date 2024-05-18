@@ -42,7 +42,7 @@ class Env:
 	communicating = True # Controls communication loop
 	interfacing = True # Controls pygame loop
 	uri = "ws://localhost:7979"
-	def __init__(self, model, maxsteps, epsilon, logging=False) -> None:
+	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False) -> None:
 		self.steps = []
 		self.model = model
 		self.model.get_layer(index=0).reset_state()
@@ -53,6 +53,7 @@ class Env:
 		self.neural_intercom = NeuralIntercom()
 		self.logging = logging
 		self.total_reward=0
+		self.gui=gui
 	def log(self,*args):
 		if self.logging:
 			print(*args)
@@ -61,7 +62,7 @@ class Env:
 		async with websockets.connect(self.uri) as websocket:
 			try:
 				ready = await websocket.recv() == 'READY'
-			except:
+			except ConnectionError:
 				self.interfacing = False
 				self.communicating = False
 				return
@@ -82,7 +83,7 @@ class Env:
 		await sleep(0.350)
 		try:
 			await websocket.send('p')
-		except:
+		except ConnectionError:
 			self.log('ENDED 71')
 			self.communicating=False
 			return
@@ -139,7 +140,7 @@ class Env:
 			action=ACTION_SPACE[y]
 			try:
 				await websocket.send(action)
-			except:
+			except ConnectionError:
 				self.communicating=False
 				self.interfacing=False
 				self.log('END L121')
@@ -156,7 +157,7 @@ class Env:
 			self.log('YAY')
 			try:
 				message = await websocket.recv()
-			except:
+			except ConnectionError:
 				self.communicating=False
 				self.interfacing = False
 				self.log('END 138')
@@ -197,7 +198,7 @@ class Env:
 				newstate=json.loads(newstate)
 				if newstate != "": 
 					state = newstate
-			except: pass
+			except IndexError: pass
 			x = (x + 1) % (WIDTH - radius * 2) + radius
 			# fill the background with white
 			screen.fill((0,0,0))
@@ -242,11 +243,15 @@ class Env:
 		pygame.quit()
 
 	def game_thread(self):
-		async def prog():
-			await asyncio.gather(
-				asyncio.to_thread(self.pygame_interface),
-				self.start_communication(),
-			)
+		if self.gui:
+			async def prog():
+				await asyncio.gather(
+					asyncio.to_thread(self.pygame_interface),
+					self.start_communication(),
+				)
+		else:
+			async def prog():
+				await self.start_communication()
 		asyncio.run(prog())
 		self.log('=======')
 
