@@ -13,9 +13,11 @@ from keras.src.saving.saving_lib import save_model, load_model
 import keras_lmu
 
 def prep_model(model,episode):
-    for (current_state, action, reward, new_current_state, done) in episode[:-1]:
+    print('prep_model started')
+    for (current_state, action, reward, new_current_state, done) in tqdm(episode[:-1], 'prep_model'):
         model.predict(current_state, verbose=0)
 def prep_target(target_model,episode):
+    print('prep_target started')
     for (current_state, action, reward, new_current_state, done) in episode[:-1]:
         target_model.predict(new_current_state, verbose=0)
 
@@ -26,9 +28,9 @@ from dqn.mine.stats import Stats
 
 DISCOUNT = 0.99
 REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training
-MIN_REPLAY_MEMORY_SIZE = 10  # Minimum number of steps in a memory to start training
+MIN_REPLAY_MEMORY_SIZE = 2  # Minimum number of steps in a memory to start training
 MIN_EXPERIENCE_PER_EPISODE_SIZE = 2  # Minimum number of steps in a memory to start training
-MINIBATCH_SIZE = 10  # How many steps (samples) to use for training
+MINIBATCH_SIZE = 2  # How many steps (samples) to use for training
 UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes)
 MODEL_NAME = '2x256'
 MIN_REWARD = -200  # For model save
@@ -174,20 +176,25 @@ class DQNAgent:
             if len(episode) == 0: continue
             stop = random.randint(1, len(episode)+1)
             episode = episode[:stop]
-            print('Training nth run: starting prep')
-            prep = asyncio.create_task(asyncio.gather(
-            asyncio.get_running_loop().run_in_executor(pool,prep_model,self.model,episode),
-            asyncio.get_running_loop().run_in_executor(pool,prep_target,self.target_model,episode),
-            ))
-            printing_n = 0
-            while True:
-                printing_n+=1
-                printing_n%=4
-                try:
-                    await asyncio.wait_for(prep,1)
-                    break
-                except:
-                    print('Training: Preparing...','-\\|/'[printing_n], end='\r')
+            print('Training nth run: starting prepm')
+            await asyncio.get_event_loop().run_in_executor(pool,prep_model,self.model,episode)
+            #await asyncio.sleep(01.)
+            #print('Training nth run: starting prept')
+            #prept = asyncio.get_running_loop().run_in_executor(pool,prep_target,self.target_model,episode)
+            #print('Training nth run: starting prep together')
+            #await asyncio.sleep(0.1)
+            #prep = asyncio.gather(prepm)
+            #print('Training nth run: starting prep OK')
+
+            #printing_n = 0
+            #while True:
+            #    printing_n+=1
+            #    printing_n%=4
+            #    try:
+            #        await asyncio.wait_for(prep,1)
+            #        break
+            #    except:
+            #        print('Training: Preparing...','-\\|/'[printing_n], end='\r')
             await asyncio.sleep(0)
             # Get current states from minibatch, then query NN model for Q values
             current_state, action, reward, new_current_state, done = episode[-1]
@@ -241,7 +248,6 @@ class DQNAgent:
 async def ainput(prompt=''):
     return await asyncio.to_thread(input,prompt)
 
-running=True
 async def console(comm: Communicator):
     global running
     while True:
@@ -254,6 +260,8 @@ async def console(comm: Communicator):
 
 
 async def run():
+    global running
+    running=True
     # Create models folder
     model=None
     epsilon = 1  # not a constant, going to be decayed
