@@ -38,11 +38,12 @@ class NeuralIntercom():
 		else:
 			return None
 
+
 class Env:
 	communicating = True # Controls communication loop
 	interfacing = True # Controls pygame loop
 	uri = "ws://localhost:7979"
-	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False) -> None:
+	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False, time_errors=collections.deque(maxlen=15)) -> None:
 		self.steps = []
 		self.model = model
 		self.model.get_layer(index=0).reset_state()
@@ -54,6 +55,7 @@ class Env:
 		self.logging = logging
 		self.total_reward=0
 		self.gui=gui
+		self.time_errors = time_errors
 	def log(self,*args):
 		if self.logging:
 			print(*args)
@@ -62,7 +64,7 @@ class Env:
 		async with websockets.connect(self.uri) as websocket:
 			try:
 				ready = await websocket.recv() == 'READY'
-			except ConnectionError:
+			except (websockets.ConnectionClosedError,websockets.ConnectionClosedOK):
 				self.interfacing = False
 				self.communicating = False
 				return
@@ -78,24 +80,19 @@ class Env:
 			await websocket.close()
 
 	async def send_loop(self,websocket: websockets.WebSocketClientProtocol):
-		last=time.time()
 		score=25
 		await sleep(0.350)
 		try:
 			await websocket.send('p')
-		except ConnectionError:
+		except (websockets.ConnectionClosedError,websockets.ConnectionClosedOK):
 			self.log('ENDED 71')
 			self.communicating=False
 			return
-		#await sleep(1)
+		last=time.time()
 		while self.communicating or self.neural_intercom.dead:
 			r=self.neural_intercom.pop()
 			if r is None:
 				asyncio.sleep(0)
-				continue
-			new=time.time()
-			if new-last < 0.02:
-				await sleep(0.015)
 				continue
 			state,_missed_frames=r
 			self.log("MISSED:",_missed_frames)
@@ -128,7 +125,7 @@ class Env:
 					return
 			else:
 				self.step_counter = 0
-			y=tf.reshape(self.model.predict([vision])[0],(6))
+			y=tf.reshape(self.model.predict([vision], verbose=1)[0],(6))
 			yagent=tf.argmax(y).numpy()
 			yeps = numpy.random.randint(0,len(ACTION_SPACE))
 			if numpy.random.random() > self.epsilon:
@@ -138,17 +135,27 @@ class Env:
 				y=yeps
 				self.log('yeps')
 			action=ACTION_SPACE[y]
+			new=time.time()
+			time_errors = self.time_errors
+			time_offset=sum(time_errors)/float(len(time_errors)) if len(time_errors) > 10 else 0
+			if new-last < 0.166+time_offset:
+				print('A',0.166+time_offset-new+last)
+				await sleep(0.166+time_offset-new+last)
+				continue
 			try:
 				await websocket.send(action)
-			except ConnectionError:
+			except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK):
 				self.communicating=False
 				self.interfacing=False
-				self.log('END L121')
+				print('END L121')
 				return
 			# prev, action, reward, new_state, done
 			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
 			new = time.time()
-			self.log('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
+			error = 0.166-new+last
+			print('ZE',error,'ZO',time_offset)
+			time_errors.append(error+time_offset)
+			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
 			last=new
 		self.log("SENDING DONE")
 
@@ -157,7 +164,7 @@ class Env:
 			self.log('YAY')
 			try:
 				message = await websocket.recv()
-			except ConnectionError:
+			except (websockets.ConnectionClosedError,websockets.ConnectionClosedOK):
 				self.communicating=False
 				self.interfacing = False
 				self.log('END 138')
@@ -242,33 +249,21 @@ class Env:
 		self.log('END 217')
 		pygame.quit()
 
-	def game_thread(self):
-		if self.gui:
-			async def prog():
-				await asyncio.gather(
-					asyncio.to_thread(self.pygame_interface),
-					self.start_communication(),
-				)
-		else:
-			async def prog():
-				await self.start_communication()
-		asyncio.run(prog())
-		self.log('=======')
-
-	def run(self):
+	async def run(self):
 		beg=time.time()
-		g=threading.Thread(target=self.game_thread)
 		try:
-			g.start()
+			async with asyncio.TaskGroup() as tg:
+				tg.create_task(self.start_communication())
+				if self.gui:
+					tg.create_task(asyncio.to_thread(self.pygame_interface))
 		except KeyboardInterrupt:
 			self.log('QUITTING...')
 			self.interfacing=False
 			self.communicating=False
-		g.join()
 		end=time.time()
 		self.log('Ran:',end-beg,'s', '\tStats:', self.neural_intercom.stats)
 		return self.steps,self.total_reward,self.neural_intercom.stats
 
-
 if __name__ == '__main__':
+	asyncio.run
 	self.log(len(Env(create_model(),200,1).run()))
