@@ -40,7 +40,7 @@ class NeuralIntercom():
 
 
 class Env:
-	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False) -> None:
+	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False, time_errors=collections.deque(maxlen=100)) -> None:
 		self.communicating = True # Controls communication loop
 		self.interfacing = True # Controls pygame loop
 		self.uri = "ws://hercule.local:7979"
