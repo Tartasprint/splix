@@ -77,7 +77,9 @@ class Env:
 			await asyncio.gather(self.send_loop(websocket),self.receive_loop(websocket))
 			self.log('DISCONNECTED')
 			self.interfacing=False
-			await websocket.close()
+			try:
+				await websocket.close()
+			except websockets.ConnectionClosed: pass
 
 	async def send_loop(self,websocket: websockets.WebSocketClientProtocol):
 		score=25
