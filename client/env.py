@@ -40,7 +40,7 @@ class NeuralIntercom():
 
 
 class Env:
-	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False) -> None:
+	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False, time_errors=collections.deque(maxlen=100)) -> None:
 		self.communicating = True # Controls communication loop
 		self.interfacing = True # Controls pygame loop
 		self.uri = "ws://hercule.local:7979"
@@ -94,7 +94,7 @@ class Env:
 		while self.communicating or self.neural_intercom.dead:
 			r=self.neural_intercom.pop()
 			if r is None:
-				asyncio.sleep(0)
+				await asyncio.sleep(0)
 				continue
 			state,_missed_frames=r
 			self.log("MISSED:",_missed_frames)

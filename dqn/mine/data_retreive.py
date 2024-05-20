@@ -91,6 +91,8 @@ class Communicator:
                     self.update_needed = True
             elif message == 'STOP':
                 state = LISTEN_STATE.STOPPED
+                await self.websocket.send('STOP')
+                print('STOPPED NORMALLY')
                 break
         return state
 
@@ -129,7 +131,6 @@ class PlayingAgent:
         self.comm = Communicator(self)
 
     async def run(self):
-        
         # For more repetitive results
         random.seed(1)
         np.random.seed(1)
@@ -138,7 +139,7 @@ class PlayingAgent:
         self.comm.start()
         await self.comm.ready.wait()
         print('Communication established !')
-        time_errors=deque(maxlen=100)
+        time_errors=deque(maxlen=20)
         # Iterate over experiences
         for experience in itertools.count(start=0):
             self.experience = experience
