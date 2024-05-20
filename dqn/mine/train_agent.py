@@ -82,7 +82,9 @@ class Communicator:
         async with websockets.serve(
             self.handle_connection,
             self.uri, self.port,
-            read_limit=100_000_000, write_limit=100_000_000, max_size=100_000_000):
+            read_limit=100_000_000, write_limit=100_000_000, max_size=100_000_000,
+            ping_timeout=None
+            ):
             await self.server_stop
     
     async def handle_connection(self,socket: websockets.WebSocketServerProtocol):
@@ -289,6 +291,9 @@ async def run():
             print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-len(comm.newsteps)-len(agent.replay_memory),MIN_EXPERIENCE_PER_EPISODE_SIZE-len(comm.newsteps)))
             try:
                 await asyncio.wait_for(comm.ready_to_train.wait(),1)
+                if comm.server_task.done():
+                    print('Server was auto-stopped...')
+                    break
                 if comm.ready_to_train.is_set(): break
             except TimeoutError:
                 continue

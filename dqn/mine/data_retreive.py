@@ -50,6 +50,7 @@ class Communicator:
                 user_agent_header=None,
                 open_timeout=None,
                 read_limit=100_000_000, write_limit=100_000_000, max_size=100_000_000,
+                ping_timeout=None,
                 ) as websocket:
             self.websocket=websocket    
             state = await self.listen_loop()
