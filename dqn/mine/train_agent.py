@@ -12,6 +12,13 @@ from keras.src.saving.saving_lib import save_model, load_model
 
 import keras_lmu
 
+def prep_model(model,episode):
+    for (current_state, action, reward, new_current_state, done) in episode[:-1]:
+        model.predict(current_state, verbose=0)
+def prep_target(target_model,episode):
+    for (current_state, action, reward, new_current_state, done) in episode[:-1]:
+        target_model.predict(new_current_state, verbose=0)
+
 from dqn.mine import config
 from dqn.mine.model import create_model
 from dqn.mine.modified_tensorboard import ModifiedTensorBoard
@@ -44,6 +51,7 @@ SHOW_PREVIEW = False
 #backend.set_session(tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)))
 
 
+
 class Communicator:
     def __init__(self,agent: 'DQNAgent', uri: str, port: int, stats: Stats, epsilon, episode):
         self.agent = agent
@@ -64,7 +72,8 @@ class Communicator:
         self.server_task = asyncio.create_task(self.communicate())
     
     async def stop(self):
-        self.workers.clear()
+        print('STOPPING COMS')
+        websockets.broadcast(self.workers,'STOP')
         self.server_stop.set_result(None)
         await self.server_task
 
@@ -112,6 +121,7 @@ class Communicator:
             for worker in self.workers:
                 tg.create_task(send(worker))
         return
+    
 
 # Agent class
 class DQNAgent:
@@ -145,7 +155,7 @@ class DQNAgent:
             raise ValueError('AYAYAYAYAY')
 
     # Trains main network every step during episode
-    async def train(self):
+    async def train(self, pool: ProcessPoolExecutor):
 
         # Start training only if certain number of samples is already saved
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
@@ -161,13 +171,14 @@ class DQNAgent:
             if len(episode) == 0: continue
             stop = random.randint(1, len(episode)+1)
             episode = episode[:stop]
-            for (current_state, action, reward, new_current_state, done) in episode[:-1]:
-                await asyncio.sleep(0)
-                self.model.predict(current_state, verbose=0)
-                await asyncio.sleep(0)
-                self.target_model.predict(new_current_state, verbose=0)
+            
+            await asyncio.gather(
+            asyncio.get_running_loop().run_in_executor(pool,prep_model,self.model,episode),
+            asyncio.get_running_loop().run_in_executor(pool,prep_target,self.target_model,episode),
+            )
             await asyncio.sleep(0)
             # Get current states from minibatch, then query NN model for Q values
+            current_state, action, reward, new_current_state, done = episode[-1]
             current_state = episode[-1][0]
             current_qs = self.model.predict(current_state, verbose=0)
             await asyncio.sleep(0)
@@ -258,7 +269,7 @@ async def run():
         epsilon,
         last_episode,
         )
-    process_pool = ProcessPoolExecutor(max_workers=1)
+    process_pool = ProcessPoolExecutor()
     if exmem is not None:
         agent.replay_memory = exmem
     # For more repetitive results
@@ -287,7 +298,7 @@ async def run():
         # Get new steps
         await agent.update_replay_memory(comm)
         print('Training')
-        await agent.train()
+        await agent.train(process_pool)
         await comm.broadcast_update()
 
         agent.model.save('models/model.keras', overwrite=True)

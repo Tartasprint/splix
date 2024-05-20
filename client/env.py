@@ -92,7 +92,7 @@ class Env:
 		while self.communicating or self.neural_intercom.dead:
 			r=self.neural_intercom.pop()
 			if r is None:
-				asyncio.sleep(0)
+				await asyncio.sleep(0)
 				continue
 			state,_missed_frames=r
 			self.log("MISSED:",_missed_frames)
