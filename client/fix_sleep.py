@@ -16,9 +16,9 @@ async def sleep(sleep_for: float) -> None:
     """
     bef=time()
     offset = -sum(errors)/float(len(errors))
-    #print("A",sleep_for+offset) 
-    await get_running_loop().run_in_executor(None, time_sleep, max(0,sleep_for+offset*2))
+    print("B",sleep_for+offset) 
+    await get_running_loop().run_in_executor(None, time_sleep, max(0,sleep_for+offset))
     aft=time()
     error=aft-bef-sleep_for
-    #print("E",str(abs(int(error*1000))<5).rjust(7))
-    errors.append(error)
+    print("E",error)
+    errors.append(error+offset)

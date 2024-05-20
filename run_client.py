@@ -6,4 +6,4 @@ if False:
 else:
     model = load_model('./models/model.keras')
 
-print(len(Env(model,10000,0,logging=True,gui=True).run()))
+print(len(Env(model,10000,0,logging=True,gui=False).run()))
