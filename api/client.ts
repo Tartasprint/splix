@@ -76,7 +76,7 @@ export class Client {
 	lastSendDir = -1; lastSendDirTime = 0;  //used to prevent spamming buttons
 	sendDirQueue: {dir: Direction, addTime: number}[] = [];
 	isConnecting = false;
-	pilot_ondead: ()=>void;
+	pilot_ondead: (d:number)=>void;
 	pilot_onready: ()=>void;
 	state: ClientState = ClientState.PREPARING;
 	client_count: number;
@@ -84,7 +84,7 @@ export class Client {
 
 	constructor(
 		prog: (theGetObservation: () => string | null,SendDir: (dir: Direction) => boolean) => void,
-		ondead: ()=>void,
+		ondead: (d: number)=>void,
 		onready: ()=>void,
 		client_count: number,
 	) {
@@ -370,7 +370,7 @@ export class Client {
 		}
 		const f = this.pilot_ondead;
 		this.pilot_ondead = ()=>{};
-		f()
+		f(this.lastStatDeathType)
 		clearInterval(this.loop_interval_id);
 		if (!this.playingAndReady) {
 			if (!this.isTransitioning) {
@@ -1301,7 +1301,7 @@ export class Client {
 		}
 	}
 
-	getObservation(dying: boolean = false): string | null {
+	getObservation(dying: number = 0): string | null {
 		if(!this.playingAndReady && this.lastStatDeathType == 0) return null;
 		let obs;
 		try {
@@ -1328,7 +1328,7 @@ class Observation {
 	block_score: number = 25;
 	kill_score: number = 0;
 	RADIUS: number = 10;
-	dying: boolean = false;
+	dying: number = 0;
 	constructor(client: Client){
 		if(client.myPos === null && client.lastStatDeathType === 0) throw new ObservationSpecificError('Client is not initialized yet.');
 		

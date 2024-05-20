@@ -27,8 +27,8 @@ server.on("connection", (client: WebSocketClient) => {
                 else gameclient.log('!!!v Message sent:', message);
             });
         },
-        () => {
-            const obs = gameclient.getObservation(true)
+        (death:number) => {
+            const obs = gameclient.getObservation(death)
             if(obs !== null){
                 clearInterval(obs_interval[0])
                 client.send(obs)

@@ -26,7 +26,7 @@ class NeuralIntercom():
 		if v == '': return
 		if self.dead:
 			return
-		self.dead = v['dying']
+		self.dead = v['dying'] > 0
 		self.intercom = v
 		self.received+=1
 	def pop(self):
@@ -106,11 +106,17 @@ class Env:
 			vision=tf.reshape(vision,(1,1,1323))
 			reward=newscore-score
 			score=newscore
-			if state['dying']:
+			if state['dying'] == 1: #killed by player
+				reward -=100
+			if state['dying'] == 2: #killed by wall
 				reward -=1000
+			if state['dying'] == 3: #killed by yourself
+				reward -=500
+				reward -=100
+			reward -=0.1 # No move is lose			
 			self.total_reward +=reward
 			if len(self.steps) > 0:
-				self.steps[-1][-1] = state['dying']
+				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
 			if self.neural_intercom.dead:

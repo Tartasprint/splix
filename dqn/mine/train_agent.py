@@ -26,9 +26,9 @@ from dqn.mine.stats import Stats
 
 DISCOUNT = 0.99
 REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training
-MIN_REPLAY_MEMORY_SIZE = 10  # Minimum number of steps in a memory to start training
+MIN_REPLAY_MEMORY_SIZE = 200  # Minimum number of steps in a memory to start training
 MIN_EXPERIENCE_PER_EPISODE_SIZE = 2  # Minimum number of steps in a memory to start training
-MINIBATCH_SIZE = 10  # How many steps (samples) to use for training
+MINIBATCH_SIZE = 64  # How many steps (samples) to use for training
 UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes)
 MODEL_NAME = '2x256'
 MIN_REWARD = -200  # For model save
@@ -174,10 +174,9 @@ class DQNAgent:
             stop = random.randint(1, len(episode)+1)
             episode = episode[:stop]
             
-            await asyncio.gather(
-            asyncio.get_running_loop().run_in_executor(pool,prep_model,self.model,episode),
-            asyncio.get_running_loop().run_in_executor(pool,prep_target,self.target_model,episode),
-            )
+            prep_model(self.model,episode)
+            await asyncio.sleep(0)
+            prep_target(self.target_model,episode)
             await asyncio.sleep(0)
             # Get current states from minibatch, then query NN model for Q values
             current_state, action, reward, new_current_state, done = episode[-1]

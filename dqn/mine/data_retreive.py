@@ -108,6 +108,7 @@ class Communicator:
         await self.websocket.send('NEW_STEPS')
         await self.websocket.send(pickle.dumps([steps]))
         await self.websocket.send(pickle.dumps(self.agent.stats))
+        self.agent.stats.clear()
     
     async def update_agent(self):
         async with self.data_lock:
