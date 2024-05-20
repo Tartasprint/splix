@@ -158,26 +158,36 @@ class DQNAgent:
 
     # Trains main network every step during episode
     async def train(self, pool: ProcessPoolExecutor):
-
         # Start training only if certain number of samples is already saved
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
             return
 
+        print('Started training')
         # Get a minibatch of random samples from memory replay table
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
         for episode in tqdm(minibatch, total=MINIBATCH_SIZE):
+            print('Training nth run')
             await asyncio.sleep(0)
             self.model.get_layer(index=0).reset_state()
             self.target_model.get_layer(index=0).reset_state()
             if len(episode) == 0: continue
             stop = random.randint(1, len(episode)+1)
             episode = episode[:stop]
-            
-            await asyncio.gather(
+            print('Training nth run: starting prep')
+            prep = asyncio.create_task(asyncio.gather(
             asyncio.get_running_loop().run_in_executor(pool,prep_model,self.model,episode),
             asyncio.get_running_loop().run_in_executor(pool,prep_target,self.target_model,episode),
-            )
+            ))
+            printing_n = 0
+            while True:
+                printing_n+=1
+                printing_n%=4
+                try:
+                    await asyncio.wait_for(prep,1)
+                    break
+                except:
+                    print('Training: Preparing...','-\\|/'[printing_n], end='\r')
             await asyncio.sleep(0)
             # Get current states from minibatch, then query NN model for Q values
             current_state, action, reward, new_current_state, done = episode[-1]
