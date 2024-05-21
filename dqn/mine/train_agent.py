@@ -127,7 +127,7 @@ class Communicator:
                 try:
                     newsteps = await socket.recv()
                     newstats = await socket.recv()
-                except websockets.ConnectionClosed:
+                except:
                     print('Bouh....')
                     break
                 async with self.steplock:
@@ -146,10 +146,12 @@ class Communicator:
         print('LEN',len(model))
         vars = pickle.dumps((self.episode,self.epsilon))
         async def send(worker: websockets.WebSocketServerProtocol):
-            await worker.send('FULL_UPDATE')
-            CHUNK_SIZE=100
-            await worker.send((model[i:i+CHUNK_SIZE] for i in range(0, len(model),CHUNK_SIZE)))
-            await worker.send(vars)
+            try:
+                await worker.send('FULL_UPDATE')
+                CHUNK_SIZE=100
+                await worker.send((model[i:i+CHUNK_SIZE] for i in range(0, len(model),CHUNK_SIZE)))
+                await worker.send(vars)
+            except: pass
         async with asyncio.TaskGroup() as tg:
             for worker in self.workers:
                 tg.create_task(send(worker))
