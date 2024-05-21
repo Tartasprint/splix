@@ -13,9 +13,11 @@ from keras.src.saving.saving_lib import save_model, load_model
 import keras_lmu
 
 def prep_model(model,episode):
-    for (current_state, action, reward, new_current_state, done) in episode[:-1]:
+    print('prep_model started')
+    for (current_state, action, reward, new_current_state, done) in tqdm(episode[:-1], 'prep_model'):
         model.predict(current_state, verbose=0)
 def prep_target(target_model,episode):
+    print('prep_target started')
     for (current_state, action, reward, new_current_state, done) in episode[:-1]:
         target_model.predict(new_current_state, verbose=0)
 
@@ -158,15 +160,16 @@ class DQNAgent:
 
     # Trains main network every step during episode
     async def train(self, pool: ProcessPoolExecutor):
-
         # Start training only if certain number of samples is already saved
         if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
             return
 
+        print('Started training')
         # Get a minibatch of random samples from memory replay table
         minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
 
         for episode in tqdm(minibatch, total=MINIBATCH_SIZE):
+            print('Training nth run')
             await asyncio.sleep(0)
             self.model.get_layer(index=0).reset_state()
             self.target_model.get_layer(index=0).reset_state()
@@ -230,7 +233,6 @@ class DQNAgent:
 async def ainput(prompt=''):
     return await asyncio.to_thread(input,prompt)
 
-running=True
 async def console(comm: Communicator):
     global running
     while True:
@@ -243,6 +245,8 @@ async def console(comm: Communicator):
 
 
 async def run():
+    global running
+    running=True
     # Create models folder
     model=None
     epsilon = 1  # not a constant, going to be decayed
