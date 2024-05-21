@@ -106,7 +106,7 @@ class Communicator:
     async def send_experience(self, steps):
         if self.websocket is None: return
         await self.websocket.send('NEW_STEPS')
-        await self.websocket.send(pickle.dumps([steps]))
+        await self.websocket.send(pickle.dumps(steps))
         await self.websocket.send(pickle.dumps(self.agent.stats))
         self.agent.stats.clear()
     

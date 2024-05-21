@@ -14,7 +14,7 @@ class ModifiedTensorBoard(tf.keras.callbacks.TensorBoard):
     # Overrided, saves logs with our step number
     # (otherwise every .fit() will start writing from 0th step)
     def on_epoch_end(self, epoch, logs=None):
-        self.update_stats(**logs)
+        pass
 
     # Overrided
     # We train for one batch only, no need to save anything at epoch end

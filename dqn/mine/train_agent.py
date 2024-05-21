@@ -1,7 +1,9 @@
+import io
 import asyncio, os, time, random, pickle
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 
+from minio import Minio
 import websockets
 from tqdm import tqdm
 
@@ -55,10 +57,10 @@ SHOW_PREVIEW = False
 
 
 class Communicator:
-    def __init__(self,agent: 'DQNAgent', uri: str, port: int, stats: Stats, epsilon, episode):
+    def __init__(self,agent: 'DQNAgent', uri: str, port: int, stats: Stats, epsilon, episode, minioexp =None):
         self.agent = agent
         self.workers: list[websockets.WebSocketServerProtocol] = []
-        self.newsteps = deque()
+        self.newsteps = 0
         self.steplock = asyncio.Lock()
         self.server_task = None
         self.server_stop = asyncio.Future()
@@ -69,6 +71,12 @@ class Communicator:
         self.port = port
         self.epsilon = epsilon
         self.episode = episode
+        self.minioexperience = minioexp if minioexp is not None else 0
+        self.minio = Minio("192.168.1.133:9004",
+            access_key="GbuMXO4jtXDUnzZCQzTl",
+            secret_key="9DVaBW8gHXyUHam0vQpeIpVV2DbJNq2cs3HNBMDA",
+            secure=False,
+        )
 
     def start(self):
         self.server_task = asyncio.create_task(self.communicate())
@@ -79,6 +87,24 @@ class Communicator:
         self.server_stop.set_result(None)
         await self.server_task
 
+    def send_minio(self, experience, n):
+        self.minio.put_object(
+            bucket_name='splix',
+            object_name=str(n).rjust(5,'0'),
+            data=io.BytesIO(experience),
+            length=len(experience),
+        )
+    def get_minio(self, n):
+        try:
+            response = self.minio.get_object(
+                bucket_name='splix',
+                object_name=str(n).rjust(5,'0'),
+            )
+            experience=pickle.loads(response.read())
+        finally:
+            response.close()
+            response.release_conn()
+        return experience
     
     async def communicate(self):
         async with websockets.serve(
@@ -105,8 +131,11 @@ class Communicator:
                     print('Bouh....')
                     break
                 async with self.steplock:
-                    self.newsteps.extend(pickle.loads(newsteps))
-                    if len(self.newsteps)+len(self.agent.replay_memory) >= MIN_REPLAY_MEMORY_SIZE and len(self.newsteps) >= MIN_EXPERIENCE_PER_EPISODE_SIZE:
+                    self.send_minio(newsteps,self.minioexperience)
+                    self.minioexperience+=1
+                    self.newsteps+=1
+                    self.minioexperience%=20000
+                    if self.minioexperience >= MIN_REPLAY_MEMORY_SIZE and self.newsteps >= MIN_EXPERIENCE_PER_EPISODE_SIZE:
                         self.ready_to_train.set()
                     self.stats.aggregate(pickle.loads(newstats))
         self.workers.remove(socket)
@@ -138,12 +167,10 @@ class DQNAgent:
         self.target_model = tf.keras.models.clone_model(self.model)
 
         # An array with last n steps for training
-        self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
+        self.replay_memory = []
 
         # Custom tensorboard object
         self.tensorboard = ModifiedTensorBoard(MODEL_NAME,log_dir="logs/{}-{}".format(MODEL_NAME, int(time.time())))
-
-
 
         # Used to count when to update target network with main network's weights
         self.target_update_counter = 0
@@ -152,23 +179,21 @@ class DQNAgent:
     # (observation space, action, reward, new observation space, done)
     async def update_replay_memory(self, comm: Communicator):
         async with comm.steplock:
-            self.replay_memory.extend(comm.newsteps)
-            comm.newsteps.clear()
-            comm.ready_to_train.clear()
-        if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
-            raise ValueError('AYAYAYAYAY')
+            m=comm.minioexperience-1
+            comm.newsteps=0
+        self.replay_memory=[]
+        for n in random.sample(range(m),MINIBATCH_SIZE):
+            await asyncio.sleep(0)
+            self.replay_memory.append(comm.get_minio(n))
 
     # Trains main network every step during episode
     async def train(self, pool: ProcessPoolExecutor):
         # Start training only if certain number of samples is already saved
-        if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
+        if len(self.replay_memory) < MINIBATCH_SIZE:
             return
 
         print('Started training')
-        # Get a minibatch of random samples from memory replay table
-        minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
-
-        for episode in tqdm(minibatch, total=MINIBATCH_SIZE):
+        for episode in tqdm(self.replay_memory, total=MINIBATCH_SIZE):
             print('Training nth run')
             await asyncio.sleep(0)
             self.model.get_layer(index=0).reset_state()
@@ -213,7 +238,6 @@ class DQNAgent:
         # Update target network counter every episode
         if True: # BUG
             self.target_update_counter += 1
-
         # If counter reaches set value, update target network with weights of main network
         if self.target_update_counter > UPDATE_TARGET_EVERY:
             self.target_model.set_weights(self.model.get_weights())
@@ -251,6 +275,7 @@ async def run():
     model=None
     epsilon = 1  # not a constant, going to be decayed
     last_episode = 0
+    minioexp=None
     if not os.path.isdir('models'):
         os.makedirs('models')
         model = create_model()
@@ -260,11 +285,11 @@ async def run():
         print('MODEL LOADED')
         with open('models/training_vars.pkl', 'rb') as file:   
             # Call load method to deserialze 
-            epsilon,last_episode = pickle.load(file)
+            epsilon,last_episode,minioexp = pickle.load(file)
         with open('models/steps.pkl', 'rb') as file:   
             # Call load method to deserialze 
             exmem = pickle.load(file)
-        print('VARS LOADED', epsilon, last_episode)
+        print('VARS LOADED', epsilon, last_episode, minioexp)
     model.summary()
     agent = DQNAgent(model)
     comm = Communicator(
@@ -273,6 +298,7 @@ async def run():
         Stats(config.STATS_EVERY, agent.tensorboard),
         epsilon,
         last_episode,
+        minioexp,
         )
     process_pool = ProcessPoolExecutor()
     if exmem is not None:
@@ -291,7 +317,7 @@ async def run():
         comm.epsilon=epsilon
         comm.episode=episode
         while True:
-            print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-len(comm.newsteps)-len(agent.replay_memory),MIN_EXPERIENCE_PER_EPISODE_SIZE-len(comm.newsteps)))
+            print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-len(agent.replay_memory),MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps))
             try:
                 await asyncio.wait_for(comm.ready_to_train.wait(),1)
                 if comm.server_task.done():
@@ -312,7 +338,8 @@ async def run():
         agent.model.save('models/model.keras', overwrite=True)
         with open('models/training_vars.pkl', 'wb') as file:             
             # A new file will be created 
-            pickle.dump((epsilon,episode), file)
+            async with comm.steplock:
+                pickle.dump((epsilon,episode,comm.minioexperience), file)
         with open('models/steps.pkl', 'wb') as file:             
             # A new file will be created
             pickle.dump(agent.replay_memory, file) 

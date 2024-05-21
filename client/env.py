@@ -104,8 +104,7 @@ class Env:
 			players=tf.constant(state["players"], dtype=tf.float32, shape=(21,21))
 			vision=tf.stack([blocks,trails,players],axis=2)
 			vision=tf.reshape(vision,(1,1,1323))
-			reward=newscore-score
-			score=newscore
+			reward=(newscore-score)*10
 			if state['dying'] == 1: #killed by player
 				reward -=100
 			if state['dying'] == 2: #killed by wall
@@ -113,12 +112,17 @@ class Env:
 			if state['dying'] == 3: #killed by yourself
 				reward -=500
 				reward -=100
-			reward -=0.1 # No move is lose			
 			self.total_reward +=reward
+			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
+				if self.steps[-1][1] == 4:
+					reward -=1
+				if newscore-score > 0: # more diffuse score
+					self.steps[-1][-3]+=newscore-score
 				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
+			score=newscore
 			if self.neural_intercom.dead:
 				self.communicating = False
 				self.interfacing = False
