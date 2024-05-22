@@ -118,9 +118,9 @@ class Env:
 			if(newscore-score)>0:
 				print()
 			reward=(newscore-score)*10
-			if state['dying'] == 1: #killed by player
+			if state['dying'] == 1: # killed by player
 				reward -=100
-			if state['dying'] == 2: #killed by wall
+			if state['dying'] == 2: # killed by wall
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
 				reward -=100
