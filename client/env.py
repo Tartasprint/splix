@@ -103,8 +103,8 @@ class Env:
 			self.log("MISSED:",_missed_frames)
 			newscore=state['kill_score']*500+state['block_score']
 			newkills=state['kill_score']-kill_score
+			kill_score += newkills
 			if newkills > 0:
-				kill_score += newkills
 				last_kill = len(self.steps)
 				print('Kills',newkills)
 			if 500*newkills != newscore-score:
