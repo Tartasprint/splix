@@ -1,6 +1,22 @@
 import tensorflow as tf
 import os
 
+def dict_mean(dicts:list[dict]):
+    counts = {}
+    vals = {}
+    for d in dicts:
+        for k,v in d.items():
+            if k in counts:
+                counts[k]=1
+                vals[k]=v
+            else:
+                counts[k]+=1
+                vals[k]+=v
+    avgs = {}
+    for k in counts:
+        avgs[k]=vals[k]/avgs[k]
+    return avgs
+
 class ModifiedTensorBoard(tf.keras.callbacks.TensorBoard):
 
     # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
@@ -9,13 +25,17 @@ class ModifiedTensorBoard(tf.keras.callbacks.TensorBoard):
         self.step = 1
         self.writer = tf.summary.create_file_writer(self.log_dir)
         self._log_write_dir = os.path.join(self.log_dir, model_name)
+        self._my_very_own_logs_tarta = []
 
-    
+
+    def write_on_i_want(self):
+        self.update_stats(**dict_mean(self._my_very_own_logs_tarta))
+        self._my_very_own_logs_tarta = []
+
     # Overrided, saves logs with our step number
     # (otherwise every .fit() will start writing from 0th step)
     def on_epoch_end(self, epoch, logs=None):
-        print(logs)
-        self.update_stats(**logs)
+        self._my_very_own_logs_tarta.append(logs)
 
     # Overrided
     # We train for one batch only, no need to save anything at epoch end

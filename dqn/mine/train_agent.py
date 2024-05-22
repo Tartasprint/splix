@@ -237,6 +237,8 @@ class DQNAgent:
             # Fit on all samples as one batch, log only on terminal state
             self.model.fit(current_state, current_qs, batch_size=1, verbose=0, shuffle=False, callbacks=[self.tensorboard])
             await asyncio.sleep(0)
+        # Write onto target
+        self.tensorboard.write_on_i_want()
         # Update target network counter every episode
         if True: # BUG
             self.target_update_counter += 1
