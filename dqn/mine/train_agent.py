@@ -318,7 +318,7 @@ async def run():
         comm.epsilon=epsilon
         comm.episode=episode
         while True:
-            tqdm.write(f'Waiting for new steps: {max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)}')
+            tqdm.write(f'Waiting for new steps: {max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)}    ',end='\r')
             try:
                 await asyncio.wait_for(comm.ready_to_train.wait(),1)
                 if comm.server_task.done():
@@ -327,6 +327,7 @@ async def run():
                 if comm.ready_to_train.is_set(): break
             except TimeoutError:
                 continue
+        tqdm.write('')
         if not running: break
         tqdm.write('Got new steps')
 
