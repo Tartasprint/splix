@@ -192,7 +192,7 @@ class DQNAgent:
         if len(self.replay_memory) < MINIBATCH_SIZE:
             return
 
-        for episode in tqdm(self.replay_memory, total=MINIBATCH_SIZE, position=1, unit='experience'):
+        for episode in tqdm(self.replay_memory, total=MINIBATCH_SIZE, position=2, unit='experience'):
             await asyncio.sleep(0)
             self.model.get_layer(index=0).reset_state()
             self.target_model.get_layer(index=0).reset_state()
@@ -312,14 +312,14 @@ async def run():
     comm.start()
     asyncio.create_task(console(comm))
     # Iterate over episodes
-    for episode in tqdm(range(last_episode+1, EPISODES+1), ascii=True, unit='episodes',position=0):
+    for episode in tqdm(range(last_episode+1, EPISODES+1), ascii=True, unit='episodes',position=1):
         # Update tensorboard step every episode
         agent.tensorboard.step = episode
         comm.epsilon=epsilon
         comm.episode=episode
         towait = max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
         if towait > 0:
-            with tqdm(total=towait, desc='Waiting for new steps', position=1) as pbar:
+            with tqdm(total=towait, desc='Waiting for new steps', position=2) as pbar:
                 while True:
                     inc = towait - max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
                     if inc > 0: pbar.update(inc)
