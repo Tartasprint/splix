@@ -14,7 +14,7 @@ def dict_mean(dicts:list[dict]):
                 vals[k]+=v
     avgs = {}
     for k in counts:
-        avgs[k]=vals[k]/avgs[k]
+        avgs[k]=vals[k]/counts[k]
     return avgs
 
 class ModifiedTensorBoard(tf.keras.callbacks.TensorBoard):
