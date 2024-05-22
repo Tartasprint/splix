@@ -162,7 +162,6 @@ class Env:
 			if new-last < 0.166+time_offset:
 				self.log('A',0.166+time_offset-new+last)
 				await sleep(0.166+time_offset-new+last)
-				continue
 			try:
 				await websocket.send(action)
 			except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK):
