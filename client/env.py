@@ -92,7 +92,8 @@ class Env:
 			self.communicating=False
 			return
 		last=time.time()
-		cco=0
+		last_kill=-1
+		kill_score=0
 		while self.communicating or self.neural_intercom.dead:
 			r=self.neural_intercom.pop()
 			if r is None:
@@ -101,15 +102,16 @@ class Env:
 			state,_missed_frames=r
 			self.log("MISSED:",_missed_frames)
 			newscore=state['kill_score']*500+state['block_score']
+			newkills=state['kill_score']-kill_score
+			if newkills > 0:
+				kill_score += newkills
+				last_kill = len(self.steps)
 			blocks=tf.constant(state["blocks"], dtype=tf.float32, shape=(21,21))
 			trails=tf.constant(state["trails"], dtype=tf.float32, shape=(21,21))
 			players=tf.constant(state["players"], dtype=tf.float32, shape=(21,21))
 			vision=tf.stack([blocks,trails,players],axis=2)
 			vision=tf.reshape(vision,(1,1,1323))
-			if state['dying'] == 3: #killed by yourself is not a valid kill
-				newscore -=500
-			cco+=1
-			print('\nBARZOG',newscore, newscore-score, cco)
+			print('\nBARZOG',newscore, newscore-score)
 			if(newscore-score)>0:
 				print()
 			reward=(newscore-score)*10
@@ -119,6 +121,12 @@ class Env:
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
 				reward -=100
+				if last_kill >= 0 and len(self.steps)-last_kill<=5:
+					self.steps[last_kill][-3]-=5000
+					self.total_reward -= 5000
+					if last_kill > 0:
+						self.steps[last_kill-1][-1]-=500
+						self.total_reward -= 500
 			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
 				if self.steps[-1][1] == 4:
