@@ -92,6 +92,7 @@ class Env:
 			self.communicating=False
 			return
 		last=time.time()
+		cco=0
 		while self.communicating or self.neural_intercom.dead:
 			r=self.neural_intercom.pop()
 			if r is None:
@@ -107,7 +108,8 @@ class Env:
 			vision=tf.reshape(vision,(1,1,1323))
 			if state['dying'] == 3: #killed by yourself is not a valid kill
 				newscore -=500
-			print('\n',newscore, newscore-score)
+			cco+=1
+			print('\nBARZOG',newscore, newscore-score, cco)
 			if(newscore-score)>0:
 				print()
 			reward=(newscore-score)*10
