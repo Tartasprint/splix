@@ -124,12 +124,14 @@ class Env:
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
 				reward -=100
-				if last_kill >= 0 and len(self.steps)-last_kill<=10:
-					self.steps[last_kill][-3]-=5000
-					self.total_reward -= 5000
-					if last_kill > 0:
-						self.steps[last_kill-1][-1]-=500
-						self.total_reward -= 500
+			if (last_kill >= 0) and  (
+				state['dying'] == 3 or newkills < 0 # undo last kill if it was suicide or fake (due to lag correction)
+			):
+				self.steps[last_kill][-3]-=5000
+				self.total_reward -= 5000
+				if last_kill > 0:
+					self.steps[last_kill-1][-1]-=500
+					self.total_reward -= 500
 			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
 				if self.steps[-1][1] == 4:
