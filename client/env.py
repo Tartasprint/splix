@@ -128,12 +128,12 @@ class Env:
 			if self.neural_intercom.dead:
 				self.communicating = False
 				self.interfacing = False
-				print('ENDED DEAD')
+				print('ENDED DEAD'.ljust(20))
 				return
 			if(reward<=0):
 				self.step_counter +=1
 				if self.step_counter > self.maxsteps:
-					print("ENDED TOO LONG")
+					print("ENDED TOO LONG".ljust(20))
 					self.communicating = False
 					self.interfacing = False
 					return
@@ -161,7 +161,7 @@ class Env:
 			except (websockets.ConnectionClosedError, websockets.ConnectionClosedOK):
 				self.communicating=False
 				self.interfacing=False
-				print('END L121')
+				print('END L121'.ljust(20))
 				return
 			# prev, action, reward, new_state, done
 			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
