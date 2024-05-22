@@ -12,7 +12,7 @@ server.on("connection", (client: WebSocketClient) => {
         (getObservation,sendDir) => {
             obs_interval[0]=setInterval(()=>{
                 const observation = gameclient.getObservation();
-                if(observation !== null){
+                if(observation !== null && obs_interval[0] != 0){
                     client.send(observation)
                 }
             },166);
@@ -28,9 +28,10 @@ server.on("connection", (client: WebSocketClient) => {
             });
         },
         (death:number) => {
+            clearInterval(obs_interval[0])
+            obs_interval[0]=0
             const obs = gameclient.getObservation(death)
             if(obs !== null){
-                clearInterval(obs_interval[0])
                 client.send(obs)
                 console.log('sending observation')
             }
