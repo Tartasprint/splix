@@ -255,7 +255,8 @@ class DQNAgent:
         return self.model.predict(np.array(state).reshape(-1, *state.shape)/255)[0]
 
 async def ainput(prompt=''):
-    return await asyncio.to_thread(input,prompt)
+    tqdm.write(prompt)
+    return await asyncio.to_thread(input)
 
 async def console(comm: Communicator):
     global running
