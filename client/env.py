@@ -130,8 +130,6 @@ class Env:
 				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
-			self.total_reward +=reward
-			score=newscore
 			if self.neural_intercom.dead:
 				self.communicating = False
 				self.interfacing = False
@@ -146,6 +144,8 @@ class Env:
 					return
 			else:
 				self.step_counter = 0
+			score=newscore
+			self.total_reward +=reward
 			y=tf.reshape(self.model.predict([vision], verbose=self.logging)[0],(6))
 			yagent=tf.argmax(y).numpy()
 			yeps = numpy.random.randint(0,len(ACTION_SPACE))
