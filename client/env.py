@@ -139,7 +139,7 @@ class Env:
 					return
 			else:
 				self.step_counter = 0
-			y=tf.reshape(self.model.predict([vision], verbose=1)[0],(6))
+			y=tf.reshape(self.model.predict([vision], verbose=self.logging)[0],(6))
 			yagent=tf.argmax(y).numpy()
 			yeps = numpy.random.randint(0,len(ACTION_SPACE))
 			if numpy.random.random() > self.epsilon:
@@ -169,7 +169,7 @@ class Env:
 			error = 0.166-new+last
 			self.log('ZE',error,'ZO',time_offset)
 			time_errors.append(error+time_offset)
-			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000), end='\r' if not self.logging else '\n').rjust(9))
+			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9), end='\r' if not self.logging else '\n')
 			last=new
 		if not self.logging: print()
 		self.log("SENDING DONE")
