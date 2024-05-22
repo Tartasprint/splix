@@ -41,19 +41,19 @@ class NeuralIntercom():
 
 class Env:
 	def __init__(self, model, maxsteps, epsilon, logging=False, gui=False, time_errors=collections.deque(maxlen=100)) -> None:
-		self.communicating = True # Controls communication loop
-		self.interfacing = True # Controls pygame loop
 		self.uri = "ws://hercule.local:7979"
 		self.steps = []
 		self.model = model
 		self.model.get_layer(index=0).reset_state()
 		self.maxsteps = maxsteps
 		self.epsilon = epsilon
+		self.total_reward=0
 		self.step_counter = 0
 		self.intercom = collections.deque(maxlen=1)
 		self.neural_intercom = NeuralIntercom()
+		self.communicating = True # Controls communication loop
+		self.interfacing = True # Controls pygame loop
 		self.logging = logging
-		self.total_reward=0
 		self.gui=gui
 		self.time_errors = time_errors
 	def log(self,*args):
@@ -110,18 +110,19 @@ class Env:
 			if state['dying'] == 2: #killed by wall
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
-				reward -=500
+				reward -=5000
 				reward -=100
-			self.total_reward +=reward
 			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
 				if self.steps[-1][1] == 4:
 					reward -=1
 				if newscore-score > 0: # more diffuse score
 					self.steps[-1][-3]+=newscore-score
+					self.total_reward +=newscore-score
 				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
+			self.total_reward +=reward
 			score=newscore
 			if self.neural_intercom.dead:
 				self.communicating = False
