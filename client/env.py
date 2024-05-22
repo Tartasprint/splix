@@ -107,6 +107,9 @@ class Env:
 			vision=tf.reshape(vision,(1,1,1323))
 			if state['dying'] == 3: #killed by yourself is not a valid kill
 				newscore -=500
+			print('\n',newscore, newscore-score)
+			if(newscore-score)>0:
+				print()
 			reward=(newscore-score)*10
 			if state['dying'] == 1: #killed by player
 				reward -=100
@@ -171,7 +174,7 @@ class Env:
 			error = 0.166-new+last
 			self.log('ZE',error,'ZO',time_offset)
 			time_errors.append(error+time_offset)
-			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9), end='\r' if not self.logging else '\n')
+			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9), end='\n' if not self.logging else '\n')
 			last=new
 		if not self.logging: print()
 		self.log("SENDING DONE")
