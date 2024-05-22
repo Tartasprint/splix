@@ -14,12 +14,11 @@ from keras.src.saving.saving_lib import save_model, load_model
 
 import keras_lmu
 
+
 def prep_model(model,episode):
-    print('prep_model started')
-    for (current_state, action, reward, new_current_state, done) in tqdm(episode[:-1], 'prep_model'):
+    for (current_state, action, reward, new_current_state, done) in episode[:-1]:
         model.predict(current_state, verbose=0)
 def prep_target(target_model,episode):
-    print('prep_target started')
     for (current_state, action, reward, new_current_state, done) in episode[:-1]:
         target_model.predict(new_current_state, verbose=0)
 
@@ -82,7 +81,7 @@ class Communicator:
         self.server_task = asyncio.create_task(self.communicate())
     
     async def stop(self):
-        print('STOPPING COMS')
+        tqdm.write('STOPPING COMS')
         websockets.broadcast(self.workers,'STOP')
         self.server_stop.set_result(None)
         await self.server_task
@@ -117,18 +116,18 @@ class Communicator:
     
     async def handle_connection(self,socket: websockets.WebSocketServerProtocol):
         self.workers.append(socket)
-        print('New connection')
+        tqdm.write('New connection')
         self.got_one_connection.set()
         await self.broadcast_update()
-        print('Listening for new steps.')
+        tqdm.write('Listening for new steps.')
         async for message in socket:
             if message == 'NEW_STEPS':
-                print('RECEIVING NEW STEPS')
+                tqdm.write('RECEIVING NEW STEPS')
                 try:
                     newsteps = await socket.recv()
                     newstats = await socket.recv()
                 except:
-                    print('Bouh....')
+                    tqdm.write('Bouh....')
                     break
                 async with self.steplock:
                     self.send_minio(newsteps,self.minioexperience)
@@ -138,12 +137,11 @@ class Communicator:
                     if self.minioexperience >= MIN_REPLAY_MEMORY_SIZE and self.newsteps >= MIN_EXPERIENCE_PER_EPISODE_SIZE:
                         self.ready_to_train.set()
                     self.stats.aggregate(pickle.loads(newstats))
-        self.workers.remove(socket)
         if len(self.workers) == 0:
             self.got_one_connection.clear()
     async def broadcast_update(self):
         model = self.agent.serialize_model()
-        print('LEN',len(model))
+        tqdm.write(f'LEN {len(model)}')
         vars = pickle.dumps((self.episode,self.epsilon))
         async def send(worker: websockets.WebSocketServerProtocol):
             try:
@@ -194,9 +192,7 @@ class DQNAgent:
         if len(self.replay_memory) < MINIBATCH_SIZE:
             return
 
-        print('Started training')
-        for episode in tqdm(self.replay_memory, total=MINIBATCH_SIZE):
-            print('Training nth run')
+        for episode in tqdm(self.replay_memory, total=MINIBATCH_SIZE, position=1, unit='experience'):
             await asyncio.sleep(0)
             self.model.get_layer(index=0).reset_state()
             self.target_model.get_layer(index=0).reset_state()
@@ -266,7 +262,7 @@ async def console(comm: Communicator):
     while True:
         i=await ainput('Write STOP')
         if i == 'STOP':
-            print('Stopping...')
+            tqdm.write('Stopping...')
             running=False
             comm.ready_to_train.set()
             break
@@ -286,14 +282,14 @@ async def run():
         exmem = None
     else:
         model=tf.keras.models.load_model('models/model.keras')
-        print('MODEL LOADED')
+        tqdm.write('MODEL LOADED')
         with open('models/training_vars.pkl', 'rb') as file:   
             # Call load method to deserialze 
             epsilon,last_episode,minioexp = pickle.load(file)
         with open('models/steps.pkl', 'rb') as file:   
             # Call load method to deserialze 
             exmem = pickle.load(file)
-        print('VARS LOADED', epsilon, last_episode, minioexp)
+        tqdm.write('VARS LOADED', epsilon, last_episode, minioexp)
     model.summary()
     agent = DQNAgent(model)
     comm = Communicator(
@@ -315,27 +311,27 @@ async def run():
     comm.start()
     asyncio.create_task(console(comm))
     # Iterate over episodes
-    for episode in tqdm(range(last_episode+1, EPISODES+1), ascii=True, unit='episodes'):
+    for episode in tqdm(range(last_episode+1, EPISODES+1), ascii=True, unit='episodes',position=0):
         # Update tensorboard step every episode
         agent.tensorboard.step = episode
         comm.epsilon=epsilon
         comm.episode=episode
         while True:
-            print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps))
+            tqdm.write(f'Waiting for new steps: {max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)}')
             try:
                 await asyncio.wait_for(comm.ready_to_train.wait(),1)
                 if comm.server_task.done():
-                    print('Server was auto-stopped...')
+                    tqdm.write('Server was auto-stopped...')
                     break
                 if comm.ready_to_train.is_set(): break
             except TimeoutError:
                 continue
         if not running: break
-        print('Got new steps')
+        tqdm.write('Got new steps')
 
         # Get new steps
         await agent.update_replay_memory(comm)
-        print('Training')
+        tqdm.write('Training')
         await agent.train(process_pool)
         await comm.broadcast_update()
 
@@ -347,7 +343,6 @@ async def run():
         with open('models/steps.pkl', 'wb') as file:             
             # A new file will be created
             pickle.dump(agent.replay_memory, file) 
-        print('Episode:', episode,'\tEpsilon:', epsilon)            
         # Send stats to Tensorboard
         comm.stats.compile(epsilon)
 
