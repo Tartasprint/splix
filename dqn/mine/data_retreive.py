@@ -153,10 +153,10 @@ class PlayingAgent:
             await self.comm.update_agent()
             
             # Get new experience
-            steps,experience_reward,missed_stat = await Env(self.model,200,self.epsilon, logging=False, gui=False, time_errors=time_errors).run()
+            steps,experience_reward,missed_stat,nb_pauses = await Env(self.model,200,self.epsilon, logging=False, gui=False, time_errors=time_errors).run()
             
             self.stats.put_experience(missed_stat,steps,experience_reward)
-            print('Experience:', self.experience,'\tNew steps:', len(steps), '\tEpsilon:', self.epsilon, '\tReward:', experience_reward)
+            print('Experience:', self.experience,'\tNew steps:', len(steps), '\tEpsilon:', self.epsilon, '\tReward:', experience_reward, '\tPauses:', nb_pauses)
             
             # Send the new experience to the trainer
             await self.comm.send_experience(steps)

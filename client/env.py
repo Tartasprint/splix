@@ -48,6 +48,7 @@ class Env:
 		self.maxsteps = maxsteps
 		self.epsilon = epsilon
 		self.total_reward=0
+		self.pause_counter=0
 		self.step_counter = 0
 		self.intercom = collections.deque(maxlen=1)
 		self.neural_intercom = NeuralIntercom()
@@ -117,8 +118,9 @@ class Env:
 			if len(self.steps) > 0:
 				if self.steps[-1][1] == 4:
 					reward -=1
-				if newscore-score > 0: # more diffuse score
-					self.steps[-1][-3]+=newscore-score
+					self.pause_counter += 1
+				if newscore-score > 0 and len(self.steps) > 1: # more diffuse score
+					self.steps[-2][-3]+=newscore-score
 					self.total_reward +=newscore-score
 				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
@@ -282,7 +284,7 @@ class Env:
 			self.communicating=False
 		end=time.time()
 		self.log('Ran:',end-beg,'s', '\tStats:', self.neural_intercom.stats)
-		return self.steps,self.total_reward,self.neural_intercom.stats
+		return self.steps,self.total_reward,self.neural_intercom.stats,self.pause_counter
 
 if __name__ == '__main__':
 	asyncio.run
