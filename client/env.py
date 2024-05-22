@@ -152,7 +152,7 @@ class Env:
 			time_errors = self.time_errors
 			time_offset=sum(time_errors)/float(len(time_errors)) if len(time_errors) > 10 else 0
 			if new-last < 0.166+time_offset:
-				print('A',0.166+time_offset-new+last)
+				self.log('A',0.166+time_offset-new+last)
 				await sleep(0.166+time_offset-new+last)
 				continue
 			try:
@@ -166,7 +166,7 @@ class Env:
 			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
 			new = time.time()
 			error = 0.166-new+last
-			print('ZE',error,'ZO',time_offset)
+			self.log('ZE',error,'ZO',time_offset)
 			time_errors.append(error+time_offset)
 			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
 			last=new
@@ -206,8 +206,13 @@ class Env:
 		state=None
 
 		n=0
+		last = time.time()
 		# run until the user asks to quit
 		while self.interfacing and self.communicating:
+			new=time.time()
+			time.sleep(max(0,0.083-new+last))
+			print('Last', last-new)
+			last=new
 			n+=1
 			# did the user close the window
 			for event in pygame.fastevent.get():
