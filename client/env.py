@@ -106,6 +106,9 @@ class Env:
 			if newkills > 0:
 				kill_score += newkills
 				last_kill = len(self.steps)
+				print('Kills',newkills)
+			if 500*newkills != newscore-score:
+				print("Blocks",newscore-score-500*newkills)
 			blocks=tf.constant(state["blocks"], dtype=tf.float32, shape=(21,21))
 			trails=tf.constant(state["trails"], dtype=tf.float32, shape=(21,21))
 			players=tf.constant(state["players"], dtype=tf.float32, shape=(21,21))
