@@ -289,7 +289,7 @@ async def run():
         with open('models/steps.pkl', 'rb') as file:   
             # Call load method to deserialze 
             exmem = pickle.load(file)
-        tqdm.write('VARS LOADED', epsilon, last_episode, minioexp)
+        tqdm.write(f'VARS LOADED eps:{epsilon}, episode:{last_episode}, exp:{minioexp}')
     model.summary()
     agent = DQNAgent(model)
     comm = Communicator(
