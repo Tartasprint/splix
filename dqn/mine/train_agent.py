@@ -317,17 +317,21 @@ async def run():
         agent.tensorboard.step = episode
         comm.epsilon=epsilon
         comm.episode=episode
-        while True:
-            tqdm.write(f'Waiting for new steps: {max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)}    ',end='\r')
-            try:
-                await asyncio.wait_for(comm.ready_to_train.wait(),1)
-                if comm.server_task.done():
-                    tqdm.write('Server was auto-stopped...')
-                    break
-                if comm.ready_to_train.is_set(): break
-            except TimeoutError:
-                continue
-        tqdm.write('')
+        towait = max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
+        if towait > 0:
+            with tqdm(total=towait, desc='Waiting for new steps') as pbar:
+                while True:
+                    inc = towait - max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
+                    if inc > 0: pbar.update(inc)
+                    towait -= inc
+                    try:
+                        await asyncio.wait_for(comm.ready_to_train.wait(),1)
+                        if comm.server_task.done():
+                            tqdm.write('Server was auto-stopped...')
+                            break
+                        if comm.ready_to_train.is_set(): break
+                    except TimeoutError:
+                        continue
         if not running: break
         tqdm.write('Got new steps')
 
