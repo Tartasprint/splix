@@ -121,7 +121,7 @@ class Env:
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
 				reward -=100
-				if last_kill >= 0 and len(self.steps)-last_kill<=5:
+				if last_kill >= 0 and len(self.steps)-last_kill<=10:
 					self.steps[last_kill][-3]-=5000
 					self.total_reward -= 5000
 					if last_kill > 0:
