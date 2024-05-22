@@ -319,7 +319,7 @@ async def run():
         comm.epsilon=epsilon
         comm.episode=episode
         while True:
-            print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-len(agent.replay_memory),MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps))
+            print('Waiting for new steps:', max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps))
             try:
                 await asyncio.wait_for(comm.ready_to_train.wait(),1)
                 if comm.server_task.done():

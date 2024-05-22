@@ -28,7 +28,7 @@ class Stats:
                 'reward_max':max(self.rewards),
                 'epsilon':epsilon,
                 'connection_quality':np.dot(self.missed_stats/np.sum(self.missed_stats),np.array([1,-1,-4,-9,-16])),
-                'steps_avg':self.steps/self._every,
+                'steps_avg':self.steps/self.experiences,
                 'experiences':self.experiences,
                 }
             self._board.update_stats(**data)
