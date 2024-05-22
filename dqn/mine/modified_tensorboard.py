@@ -6,7 +6,7 @@ def dict_mean(dicts:list[dict]):
     vals = {}
     for d in dicts:
         for k,v in d.items():
-            if k in counts:
+            if k not in counts:
                 counts[k]=1
                 vals[k]=v
             else:
