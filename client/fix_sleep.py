@@ -16,9 +16,9 @@ async def sleep(sleep_for: float) -> None:
     """
     bef=time()
     offset = -sum(errors)/float(len(errors))
-    print("B",sleep_for+offset) 
+    #print("B",sleep_for+offset) 
     await asyncio.to_thread(time_sleep, max(0,sleep_for+offset))
     aft=time()
     error=aft-bef-sleep_for
-    print("E",error)
+    #print("E",error)
     errors.append(error+offset)

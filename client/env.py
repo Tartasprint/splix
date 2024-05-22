@@ -169,8 +169,9 @@ class Env:
 			error = 0.166-new+last
 			self.log('ZE',error,'ZO',time_offset)
 			time_errors.append(error+time_offset)
-			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000)).rjust(9))
+			print('Looped. Action:', y, '; Time:', str(int((new-last)*1000), end='\r' if not self.logging else '\n').rjust(9))
 			last=new
+		if not self.logging: print()
 		self.log("SENDING DONE")
 
 	async def receive_loop(self,websocket: websockets.WebSocketClientProtocol):
