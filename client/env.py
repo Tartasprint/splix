@@ -104,13 +104,14 @@ class Env:
 			players=tf.constant(state["players"], dtype=tf.float32, shape=(21,21))
 			vision=tf.stack([blocks,trails,players],axis=2)
 			vision=tf.reshape(vision,(1,1,1323))
+			if state['dying'] == 3: #killed by yourself is not a valid kill
+				newscore -=500
 			reward=(newscore-score)*10
 			if state['dying'] == 1: #killed by player
 				reward -=100
 			if state['dying'] == 2: #killed by wall
 				reward -=1000
 			if state['dying'] == 3: #killed by yourself
-				reward -=5000
 				reward -=100
 			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
