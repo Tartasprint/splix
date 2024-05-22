@@ -130,6 +130,8 @@ class Env:
 				self.steps[-1][-1] = state['dying'] > 0
 				self.steps[-1][-2] = tf.identity(vision)
 				self.steps[-1][-3] = reward
+			score=newscore
+			self.total_reward +=reward
 			if self.neural_intercom.dead:
 				self.communicating = False
 				self.interfacing = False
@@ -144,8 +146,6 @@ class Env:
 					return
 			else:
 				self.step_counter = 0
-			score=newscore
-			self.total_reward +=reward
 			y=tf.reshape(self.model.predict([vision], verbose=self.logging)[0],(6))
 			yagent=tf.argmax(y).numpy()
 			yeps = numpy.random.randint(0,len(ACTION_SPACE))
@@ -159,6 +159,7 @@ class Env:
 			new=time.time()
 			time_errors = self.time_errors
 			time_offset=sum(time_errors)/float(len(time_errors)) if len(time_errors) > 10 else 0
+			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
 			if new-last < 0.166+time_offset:
 				self.log('A',0.166+time_offset-new+last)
 				await sleep(0.166+time_offset-new+last)
@@ -170,7 +171,6 @@ class Env:
 				print('END L121'.ljust(20))
 				return
 			# prev, action, reward, new_state, done
-			self.steps.append([tf.identity(vision),y,0,tf.identity(vision),False])
 			new = time.time()
 			error = 0.166-new+last
 			self.log('ZE',error,'ZO',time_offset)
