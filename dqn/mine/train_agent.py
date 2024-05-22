@@ -319,7 +319,7 @@ async def run():
         comm.episode=episode
         towait = max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
         if towait > 0:
-            with tqdm(total=towait, desc='Waiting for new steps') as pbar:
+            with tqdm(total=towait, desc='Waiting for new steps', position=1) as pbar:
                 while True:
                     inc = towait - max(MIN_REPLAY_MEMORY_SIZE-comm.newsteps-comm.minioexperience,MIN_EXPERIENCE_PER_EPISODE_SIZE-comm.newsteps)
                     if inc > 0: pbar.update(inc)
