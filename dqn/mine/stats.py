@@ -22,6 +22,8 @@ class Stats:
         self.experiences+=1
     def compile(self,epsilon):
         if self._compile%self._every == 0:
+            if self.experiences == 0:
+                return
             data = {
                 'reward_avg': sum(self.rewards)/self.experiences,
                 'reward_min':min(self.rewards),
