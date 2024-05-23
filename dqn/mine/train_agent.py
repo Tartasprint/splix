@@ -319,7 +319,7 @@ async def run():
     comm.start()
     asyncio.create_task(console(comm))
     # Iterate over episodes
-    for episode in tqdm(range(last_episode+1, EPISODES+1), ascii=True, unit='episodes',position=0):
+    for episode in tqdm(range(last_episode+1, EPISODES+1), initial=last_episode+1, total=EPISODES, ascii=True, unit='episodes',position=0):
         # Update tensorboard step every episode
         agent.tensorboard.step = episode
         comm.epsilon=epsilon
