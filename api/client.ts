@@ -1341,7 +1341,7 @@ class Observation {
 			this.block_score = client.scoreStatTarget;
 			this.kill_score = (client.realScoreStatTarget-this.block_score)/500;
 		} else {
-			this.block_score = client.lastStatKills;
+			this.block_score = client.lastStatBlocks;
 			this.kill_score = client.lastStatKills;
 		}
 		this.block_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
