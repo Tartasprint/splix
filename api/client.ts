@@ -80,7 +80,9 @@ export class Client {
 	pilot_onready: ()=>void;
 	state: ClientState = ClientState.PREPARING;
 	client_count: number;
-  loop_interval_id: number;
+  	loop_interval_id: number;
+	lastStatBlocks: number = 0;
+	lastStatKills: number = 0;
 
 	constructor(
 		prog: (theGetObservation: () => string | null,SendDir: (dir: Direction) => boolean) => void,
@@ -751,8 +753,8 @@ export class Client {
 		if (data[0] == receiveAction.YOU_DED) {
 			if (data.length > 1) {
 				
-				const lastStatBlocks = bytesToInt(data[1], data[2], data[3], data[4]);
-				const lastStatKills = bytesToInt(data[5], data[6]);
+				this.lastStatBlocks = bytesToInt(data[1], data[2], data[3], data[4]);
+				this.lastStatKills = bytesToInt(data[5], data[6]);
 				/*lastStatLbRank = bytesToInt(data[7], data[8]);
 				if ((lastStatLbRank < bestStatLbRank || bestStatLbRank <= 0) && lastStatLbRank > 0) {
 					bestStatLbRank = lastStatLbRank;
@@ -785,7 +787,7 @@ export class Client {
 						_lastStatKiller = "yourself";
 						break;
 				}
-				console.log(`<<< YOU_DED killer: ${_lastStatKiller} blocks: ${lastStatBlocks} kills: ${lastStatKills}`);
+				console.log(`<<< YOU_DED killer: ${_lastStatKiller} blocks: ${this.lastStatBlocks} kills: ${this.lastStatKills}`);
 			}
 			console.log(`<<< YOU_DED nokiller`);
 			this.closedBecauseOfDeath = true;
@@ -1305,7 +1307,7 @@ export class Client {
 		if(!this.playingAndReady && this.lastStatDeathType == 0) return null;
 		let obs;
 		try {
-			obs = new Observation(this)
+			obs = new Observation(this,dying)
 		} catch (e) {
 			if(e instanceof ObservationSpecificError){
 				return null;
@@ -1329,14 +1331,19 @@ class Observation {
 	kill_score: number = 0;
 	RADIUS: number = 10;
 	dying: number = 0;
-	constructor(client: Client){
+	constructor(client: Client, dying: number = 0){
 		if(client.myPos === null && client.lastStatDeathType === 0) throw new ObservationSpecificError('Client is not initialized yet.');
 		
 		this.myPos = int_position(client.myPos);
 		this.myRank = client.myRank;
-		this.block_score = client.scoreStatTarget;
-		this.kill_score = (client.realScoreStatTarget-this.block_score)/500;
-		
+		this.dying = dying;
+		if(dying == 0) {
+			this.block_score = client.scoreStatTarget;
+			this.kill_score = (client.realScoreStatTarget-this.block_score)/500;
+		} else {
+			this.block_score = client.lastStatKills;
+			this.kill_score = client.lastStatKills;
+		}
 		this.block_surroundings = Array.from({length: (this.RADIUS*2+1)**2}, ()=> 0);
 		for(let i = 0; i < this.RADIUS*2+1; i++){
 			for(let j = 0; j < this.RADIUS*2+1; j++){
