@@ -121,7 +121,9 @@ class Env:
 			if(newscore-score)>0:
 				print()
 			reward=(newscore-score)*10
-			self.death=state['dying']
+			
+			if state['dying'] > 0: self.death=state['dying']
+
 			if state['dying'] == 1: # killed by player
 				reward -=100
 			if state['dying'] == 2: # killed by wall
@@ -312,6 +314,15 @@ class Env:
 		elif self.death == 2: normal_tot_reward -= 1000
 		elif self.death == 3: normal_tot_reward -= 5500
 		buggy = abs(self.total_reward-normal_tot_reward) > 10
+		if buggy:
+			print('BUGGY')
+			print('Calc', normal_tot_reward)
+			print('Got', self.total_reward)
+			print('Steps', len(self.steps))
+			print('Pauses', self.pause_counter)
+			print('Blocks', self.neural_intercom.blocks)
+			print('Kills', self.neural_intercom.kills)
+			print('Death', self.death)
 		return self.steps,self.total_reward,self.neural_intercom.stats,self.pause_counter, buggy
 
 if __name__ == '__main__':
