@@ -157,6 +157,7 @@ class PlayingAgent:
             
             print('Experience:', self.experience,'\tNew steps:', len(steps), '\tEpsilon:', self.epsilon, '\tReward:', experience_reward, '\tPauses:', nb_pauses)
             if buggy:
+                print('Buggu')
                 self.stats.got_a_buggy()
             else:
                 self.stats.put_experience(missed_stat,steps,experience_reward)
