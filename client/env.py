@@ -314,7 +314,9 @@ class Env:
 		normal_tot_reward = -0.1*(len(self.steps)+1)-self.pause_counter+11*(self.neural_intercom.blocks-25)+5500*self.neural_intercom.kills
 		if   self.death == 1: normal_tot_reward -=  100
 		elif self.death == 2: normal_tot_reward -= 1000
-		elif self.death == 3: normal_tot_reward -= 5500
+		elif self.death == 3:
+			normal_tot_reward -= 5500
+			normal_tot_reward -= 100
 		buggy = abs(self.total_reward-normal_tot_reward) > 10
 		if buggy:
 			print('BUGGY')
