@@ -307,9 +307,10 @@ class Env:
 			self.communicating=False
 		end=time.time()
 		self.log('Ran:',end-beg,'s', '\tStats:', self.neural_intercom.stats)
-		normal_tot_reward = -0.1*(len(self.steps)+1)-self.pause_counter+11*self.neural_intercom.blocks
-		if self.death == 1 or self.death ==  3: normal_tot_reward -= 100
-		elif self.death == 2: normal_tot_reward -=1000
+		normal_tot_reward = -0.1*(len(self.steps)+1)-self.pause_counter+11*(self.neural_intercom.blocks-25)+5500*self.neural_intercom.kills
+		if   self.death == 1: normal_tot_reward -=  100
+		elif self.death == 2: normal_tot_reward -= 1000
+		elif self.death == 3: normal_tot_reward -= 5500
 		buggy = abs(self.total_reward-normal_tot_reward) > 10
 		return self.steps,self.total_reward,self.neural_intercom.stats,self.pause_counter, buggy
 
