@@ -187,6 +187,7 @@ class DQNAgent:
         async with comm.steplock:
             m=comm.minioexperience-1
             comm.newsteps=0
+            comm.ready_to_train.clear()
         self.replay_memory=[]
         for n in random.sample(range(m),MINIBATCH_SIZE):
             await asyncio.sleep(0)
