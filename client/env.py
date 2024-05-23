@@ -21,6 +21,8 @@ class NeuralIntercom():
 		self.received=0
 		self.dead = False
 		self.stats = [0,0,0,0,0]
+		self.blocks = 0
+		self.kills = 0
 	def push(self,v):
 		v = json.loads(v)
 		if v == '': return
@@ -57,6 +59,7 @@ class Env:
 		self.logging = logging
 		self.gui=gui
 		self.time_errors = time_errors
+		self.death = 0
 	def log(self,*args):
 		if self.logging:
 			print(*args)
@@ -118,6 +121,7 @@ class Env:
 			if(newscore-score)>0:
 				print()
 			reward=(newscore-score)*10
+			self.death=state['dying']
 			if state['dying'] == 1: # killed by player
 				reward -=100
 			if state['dying'] == 2: # killed by wall
@@ -127,12 +131,13 @@ class Env:
 			if (last_kill >= 0 and len(self.steps) - last_kill <= 10) and  (
 				state['dying'] == 3 or newkills < 0 # undo last kill if it was suicide or fake (due to lag correction)
 			):
-				self.steps[last_kill][-3]-=5000
-				self.total_reward -= 5000
-				if last_kill > 0:
-					self.steps[last_kill-1][-1]-=500
-					self.total_reward -= 500
-				last_kill = -1 # do not count twice
+				if last_kill < len(self.steps):
+					self.steps[last_kill][-3]-=5000
+					self.total_reward -= 5000
+					if last_kill > 0:
+						self.steps[last_kill-1][-1]-=500
+						self.total_reward -= 500
+					last_kill = -1 # do not count twice
 			reward -=0.1 # No improve is lose			
 			if len(self.steps) > 0:
 				if self.steps[-1][1] == 4:
@@ -302,7 +307,11 @@ class Env:
 			self.communicating=False
 		end=time.time()
 		self.log('Ran:',end-beg,'s', '\tStats:', self.neural_intercom.stats)
-		return self.steps,self.total_reward,self.neural_intercom.stats,self.pause_counter
+		normal_tot_reward = -0.1*(len(self.steps)+1)-self.pause_counter+11*self.neural_intercom.blocks
+		if self.death == 1 or self.death ==  3: normal_tot_reward -= 100
+		elif self.death == 3: normal_tot_reward -=1000
+		buggy = abs(self.total_reward-normal_tot_reward) > 10
+		return self.steps,self.total_reward,self.neural_intercom.stats,self.pause_counter, buggy
 
 if __name__ == '__main__':
 	asyncio.run
