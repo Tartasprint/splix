@@ -29,6 +29,8 @@ class NeuralIntercom():
 		if self.dead:
 			return
 		self.dead = v['dying'] > 0
+		self.kills = v['kill_score']
+		self.blocks = v['block_score']
 		self.intercom = v
 		self.received+=1
 	def pop(self):
